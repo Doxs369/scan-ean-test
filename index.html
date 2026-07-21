@@ -632,18 +632,21 @@
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
-  <!-- OVERLAY CAMERA PER SCANSIONE CONTINUA DATA -->
+  <!-- OVERLAY CAMERA PER SCANSIONE DATA -->
   <div class="expiry-camera-overlay" id="expiry-camera-overlay">
     <video id="expiry-camera-video" class="expiry-camera-video" autoplay playsinline muted></video>
     <div class="expiry-camera-frame"></div>
     <div class="expiry-camera-hint">Inquadra la data di scadenza<br>nella zona tratteggiata</div>
-    <div class="expiry-camera-status" id="expiry-camera-status">Analizzo...</div>
+    <div class="expiry-camera-status" id="expiry-camera-status">Scatta la foto alla data</div>
     <div class="expiry-camera-actions">
       <button class="expiry-camera-close" onclick="closeExpiryCamera()" title="Annulla">&#10005;</button>
+      <button class="expiry-camera-btn" onclick="captureExpiryPhoto()" title="Scatta foto">
+        <div class="expiry-camera-btn-inner"></div>
+      </button>
     </div>
     <div class="expiry-ocr-loading" id="expiry-ocr-loading">
       <div class="spinner"></div>
-      <div class="expiry-ocr-loading-text">Analizzo la data...</div>
+      <div class="expiry-ocr-loading-text">Analizzo con OCR AI...</div>
     </div>
   </div>
 
@@ -656,8 +659,6 @@
 </div>
 
 <!-- MODULI JS -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="https://js.puter.com/v2/"></script>
 <script src="storage.js"></script>
 <script src="openfoodfacts.js"></script>
 <script src="recipes-api.js"></script>
