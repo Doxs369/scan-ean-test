@@ -266,6 +266,19 @@
           <input type="text" class="form-input" id="product-name-input" placeholder="Inserisci il nome del prodotto...">
         </div>
 
+        <!-- SEZIONE OCR DATA SCADENZA -->
+        <div class="form-group" id="expiry-ocr-section">
+          <label class="form-label">&#128247; Data di scadenza (OCR)</label>
+          <div class="ocr-preview-box" id="ocr-preview-box" style="display:none;">
+            <img id="ocr-preview-img" alt="Foto data scadenza">
+            <div class="ocr-status" id="ocr-status"></div>
+          </div>
+          <button class="btn btn-secondary" id="btn-scan-expiry" onclick="captureExpiryDate()" style="margin-top:0;">
+            &#128248; Scatta foto della data di scadenza
+          </button>
+          <div class="ocr-hint" id="ocr-hint">Inquadra la data di scadenza e scatta una foto. L'app la riconoscerà automaticamente.</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Data di scadenza</label>
           <input type="date" class="form-input" id="expiry-input">
@@ -432,6 +445,32 @@
     </div>
   </div>
 
+  <!-- MODAL CONFERMA DATA OCR -->
+  <div class="modal-overlay" id="ocr-confirm-modal" style="z-index:200;">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-height:90vh;">
+      <div class="modal-handle"></div>
+      <div class="modal-title">&#128269; Data rilevata</div>
+      <div class="modal-sub">Controlla e conferma la data di scadenza</div>
+
+      <div style="margin:16px 0; text-align:center;">
+        <img id="ocr-confirm-img" style="width:100%;max-height:200px;object-fit:contain;border-radius:12px;background:#f0f0f0;" alt="Foto data">
+      </div>
+
+      <div class="ocr-detected-text" id="ocr-detected-text" style="display:none;"></div>
+
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label">Data rilevata</label>
+        <input type="date" class="form-input" id="ocr-confirm-date">
+      </div>
+
+      <div class="ocr-confidence" id="ocr-confidence"></div>
+
+      <button class="btn btn-primary" style="margin-top:12px;" onclick="confirmOcrDate()">&#9989; Conferma data</button>
+      <button class="btn btn-secondary" style="margin-top:8px;" onclick="retryOcrCapture()">&#128248; Rifai foto</button>
+      <button class="btn btn-secondary" style="margin-top:8px;background:var(--bg);" onclick="skipOcrAndManual()">&#9998; Inserisci manualmente</button>
+    </div>
+  </div>
+
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
@@ -442,6 +481,9 @@
   <input type="file" id="camera-input-manual" accept="image/*" capture="environment" onchange="handleManualProductPhoto(event)">
 
 </div>
+
+<!-- Tesseract.js per OCR data scadenza -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <!-- MODULI JS -->
 <script src="storage.js"></script>
