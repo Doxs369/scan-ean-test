@@ -1234,4 +1234,152 @@ body {
   0%, 100% { border-color: var(--accent); opacity: 0.6; }
   50% { border-color: var(--primary); opacity: 1; }
 }
+/* ===== MODAL CONFERMA DATA SCADENZA ===== */
+.expiry-confirm-img {
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-confirm-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.expiry-detected-date {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 4px;
+  text-align: center;
+}
+.expiry-detected-conf {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 20px;
+}
 
+/* ===== CAMERA OVERLAY PER DATA ===== */
+.expiry-camera-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+}
+.expiry-camera-overlay.active {
+  display: flex;
+}
+.expiry-camera-video {
+  flex: 1;
+  width: 100%;
+  object-fit: cover;
+}
+.expiry-camera-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  height: 100px;
+  border: 3px dashed var(--accent);
+  border-radius: 12px;
+  background: rgba(231, 141, 110, 0.1);
+  pointer-events: none;
+  animation: expiryPulse 1.5s ease-in-out infinite;
+}
+@keyframes expiryPulse {
+  0%, 100% { border-color: var(--accent); opacity: 0.6; }
+  50% { border-color: var(--primary); opacity: 1; }
+}
+.expiry-camera-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -80px);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.expiry-camera-actions {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  z-index: 10;
+  padding: 0 20px;
+}
+.expiry-camera-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 4px solid white;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-camera-btn-inner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: white;
+}
+.expiry-camera-close {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-ocr-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  padding: 24px 32px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  z-index: 20;
+  display: none;
+}
+.expiry-ocr-loading.active {
+  display: block;
+}
+.expiry-ocr-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+.expiry-ocr-loading-text {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
