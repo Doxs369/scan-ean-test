@@ -1867,6 +1867,370 @@ function terminateExpiryOCR() {
   }
 }
 // ============================================================
+// RILEVAMENTO DATA SCADENZA - OCR.space API + fallback
+// ============================================================
+var detectedExpiryDate = null;
+var detectedExpiryConfidence = 0;
+var expiryPhotoData = null;
+var expiryCameraStream = null;
+
+// API key OCR.space - usa "helloworld" per test, poi registra su ocr.space per 25.000/mese
+var OCR_SPACE_API_KEY = 'helloworld';
+
+/**
+ * Avvia fotocamera per scattare foto alla data
+ */
+function scanExpiryDate() {
+  var btn = document.getElementById('btn-scan-expiry');
+  var statusDiv = document.getElementById('expiry-scan-status');
+  
+  btn.disabled = true;
+  statusDiv.style.display = 'block';
+  
+  showToast('&#128247; Avvio fotocamera per data...');
+  
+  var video = document.getElementById('expiry-camera-video');
+  
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('&#10060; Fotocamera non supportata');
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+    return;
+  }
+  
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false
+  })
+  .then(function(stream) {
+    expiryCameraStream = stream;
+    video.srcObject = stream;
+    video.style.display = 'block';
+    document.getElementById('expiry-camera-overlay').classList.add('active');
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+  })
+  .catch(function(err) {
+    console.error('Errore fotocamera:', err);
+    showToast('&#10060; Errore: ' + err.message);
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+  });
+}
+
+/**
+ * Cattura foto e analizza con OCR.space
+ */
+function captureExpiryPhoto() {
+  var video = document.getElementById('expiry-camera-video');
+  if (!video || !video.videoWidth) return;
+  
+  // Mostra loading
+  document.getElementById('expiry-ocr-loading').classList.add('active');
+  document.getElementById('expiry-camera-status').textContent = 'Analizzo...';
+  
+  // Cattura frame
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+  // Salva preview
+  expiryPhotoData = canvas.toDataURL('image/jpeg', 0.9);
+  
+  // Chiudi camera
+  closeExpiryCamera();
+  
+  // Ritaglia zona data (area centrale dove c'è la cornice)
+  var cropCanvas = document.createElement('canvas');
+  var cropCtx = cropCanvas.getContext('2d');
+  var cropX = canvas.width * 0.1;
+  var cropY = canvas.height * 0.3;
+  var cropW = canvas.width * 0.8;
+  var cropH = canvas.height * 0.4;
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  
+  // Converti a blob per upload
+  cropCanvas.toBlob(function(blob) {
+    // Chiama OCR.space API
+    callOCRSpace(blob);
+  }, 'image/jpeg', 0.95);
+}
+
+/**
+ * Chiama OCR.space API
+ */
+function callOCRSpace(imageBlob) {
+  var formData = new FormData();
+  formData.append('file', imageBlob, 'expiry.jpg');
+  formData.append('apikey', OCR_SPACE_API_KEY);
+  formData.append('language', 'eng');
+  formData.append('isOverlayRequired', 'false');
+  formData.append('detectOrientation', 'true');
+  formData.append('scale', 'true');
+  formData.append('OCREngine', '2'); // Engine 2 = più accurato per numeri
+  
+  fetch('https://api.ocr.space/parse/image', {
+    method: 'POST',
+    body: formData
+  })
+  .then(function(response) {
+    return response.json();
+  })
+  .then(function(data) {
+    document.getElementById('expiry-ocr-loading').classList.remove('active');
+    
+    console.log('OCR.space response:', data);
+    
+    if (data.IsErroredOnProcessing) {
+      showToast('&#10060; Errore OCR: ' + (data.ErrorMessage || 'Sconosciuto'));
+      // Prova con Tesseract locale come fallback
+      fallbackTesseractOCR();
+      return;
+    }
+    
+    if (!data.ParsedResults || data.ParsedResults.length === 0) {
+      showToast('&#128533; Nessun testo rilevato, riprova');
+      return;
+    }
+    
+    var text = data.ParsedResults[0].ParsedText || '';
+    var confidence = data.ParsedResults[0].TextOverlay ? 
+      (data.ParsedResults[0].TextOverlay.HasOverlay ? 80 : 50) : 50;
+    
+    console.log('OCR text:', text);
+    
+    var date = extractDateFromText(text);
+    
+    if (date) {
+      detectedExpiryDate = date;
+      detectedExpiryConfidence = confidence;
+      showExpiryConfirmModal(expiryPhotoData, date, confidence);
+    } else {
+      showToast('&#128533; Data non trovata nel testo: \"' + text.substring(0, 50) + '\"');
+      // Mostra comunque il modal con possibilità di riprovare
+      showExpiryConfirmModal(expiryPhotoData, null, 0);
+    }
+  })
+  .catch(function(err) {
+    console.error('Errore OCR.space:', err);
+    document.getElementById('expiry-ocr-loading').classList.remove('active');
+    showToast('&#10060; Errore rete, provo OCR locale...');
+    fallbackTesseractOCR();
+  });
+}
+
+/**
+ * Fallback con Tesseract.js locale
+ */
+function fallbackTesseractOCR() {
+  if (typeof Tesseract === 'undefined') {
+    showToast('&#10060; OCR non disponibile, inserisci manualmente');
+    return;
+  }
+  
+  showToast('&#128247; Uso OCR locale...');
+  
+  Tesseract.recognize(
+    expiryPhotoData,
+    'eng',
+    { 
+      tessedit_char_whitelist: '0123456789/.-',
+      psm: 6
+    }
+  ).then(function(result) {
+    var text = result.data.text.trim();
+    var confidence = result.data.confidence || 0;
+    
+    console.log('Tesseract fallback:', text, confidence);
+    
+    var date = extractDateFromText(text);
+    
+    if (date && confidence > 30) {
+      detectedExpiryDate = date;
+      detectedExpiryConfidence = confidence;
+      showExpiryConfirmModal(expiryPhotoData, date, confidence);
+    } else {
+      showToast('&#128533; Data non rilevata, inserisci manualmente');
+    }
+  }).catch(function(err) {
+    console.error('Tesseract error:', err);
+    showToast('&#10060; OCR fallito, inserisci manualmente');
+  });
+}
+
+/**
+ * Chiude la fotocamera data
+ */
+function closeExpiryCamera() {
+  var overlay = document.getElementById('expiry-camera-overlay');
+  var video = document.getElementById('expiry-camera-video');
+  
+  overlay.classList.remove('active');
+  
+  if (expiryCameraStream) {
+    expiryCameraStream.getTracks().forEach(function(track) { track.stop(); });
+    expiryCameraStream = null;
+  }
+  
+  video.srcObject = null;
+  video.style.display = 'none';
+  
+  document.getElementById('expiry-ocr-loading').classList.remove('active');
+}
+
+/**
+ * Estrae data dal testo OCR
+ */
+function extractDateFromText(text) {
+  if (!text) return null;
+  
+  var clean = text.replace(/\s+/g, ' ').trim();
+  
+  var patterns = [
+    // DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY
+    { regex: /(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/, format: 'DMY' },
+    // YYYY/MM/DD o YYYY-MM-DD
+    { regex: /(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/, format: 'YMD' },
+    // DD/MM/YY o DD-MM-YY
+    { regex: /(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2})/, format: 'DMY_SHORT' },
+    // Formati con parole: 15 AGO 2026
+    { regex: /(\d{1,2})\s+(GEN|FEB|MAR|APR|MAG|GIU|LUG|AGO|SET|OTT|NOV|DIC)[A-Z]*\s+(\d{4})/i, format: 'DMY_WORD' },
+    // EXP 15/08/2026, SCAD 15-08-2026
+    { regex: /(?:EXP|SCAD|SCADENZA|BB|BEST BEFORE|USE BY)[^\d]*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4}|\d{2})/i, format: 'DMY' },
+    // 20260815 (formato compatto)
+    { regex: /[^\d](20\d{2})(\d{2})(\d{2})[^\d]/, format: 'YMD_COMPACT' }
+  ];
+  
+  var monthNames = {
+    'gen': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'mag': 5, 'giu': 6,
+    'lug': 7, 'ago': 8, 'set': 9, 'ott': 10, 'nov': 11, 'dic': 12
+  };
+  
+  for (var i = 0; i < patterns.length; i++) {
+    var match = clean.match(patterns[i].regex);
+    if (match) {
+      var d, m, y;
+      
+      if (patterns[i].format === 'DMY' || patterns[i].format === 'DMY_SHORT') {
+        d = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        y = parseInt(match[3], 10);
+        if (patterns[i].format === 'DMY_SHORT') y += 2000;
+      } else if (patterns[i].format === 'YMD') {
+        y = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        d = parseInt(match[3], 10);
+      } else if (patterns[i].format === 'YMD_COMPACT') {
+        y = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        d = parseInt(match[3], 10);
+      } else if (patterns[i].format === 'DMY_WORD') {
+        d = parseInt(match[1], 10);
+        var monthStr = match[2].toLowerCase().substring(0, 3);
+        m = monthNames[monthStr] || 0;
+        y = parseInt(match[3], 10);
+      }
+      
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 2020 && y <= 2040) {
+        var yy = String(y);
+        var mm = String(m).padStart(2, '0');
+        var dd = String(d).padStart(2, '0');
+        return yy + '-' + mm + '-' + dd;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Mostra modal conferma
+ */
+function showExpiryConfirmModal(previewUrl, dateStr, confidence) {
+  var previewDiv = document.getElementById('expiry-preview-img');
+  var valueDiv = document.getElementById('expiry-detected-value');
+  var confDiv = document.getElementById('expiry-detected-confidence');
+  
+  previewDiv.innerHTML = '<img src="' + previewUrl + '" alt="Foto data scadenza">';
+  
+  if (dateStr) {
+    var parts = dateStr.split('-');
+    var displayDate = parts[2] + '/' + parts[1] + '/' + parts[0];
+    valueDiv.textContent = displayDate;
+    valueDiv.style.color = 'var(--primary)';
+    confDiv.textContent = 'Confidenza: ' + Math.round(confidence) + '%';
+    confDiv.style.display = 'block';
+  } else {
+    valueDiv.textContent = 'Data non rilevata';
+    valueDiv.style.color = 'var(--danger)';
+    confDiv.textContent = 'Prova a scattare di nuovo con più luce';
+    confDiv.style.display = 'block';
+  }
+  
+  document.getElementById('expiry-confirm-modal').classList.add('show');
+}
+
+/**
+ * Chiude modal
+ */
+function closeExpiryConfirmModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('expiry-confirm-modal').classList.remove('show');
+    detectedExpiryDate = null;
+    detectedExpiryConfidence = 0;
+    expiryPhotoData = null;
+  }
+}
+
+/**
+ * Accetta data
+ */
+function acceptDetectedExpiry() {
+  if (detectedExpiryDate) {
+    document.getElementById('expiry-input').value = detectedExpiryDate;
+    showToast('&#9989; Data scadenza inserita: ' + formatDate(detectedExpiryDate));
+  }
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+}
+
+/**
+ * Modifica
+ */
+function editDetectedExpiry() {
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+  
+  if (detectedExpiryDate) {
+    document.getElementById('expiry-input').value = detectedExpiryDate;
+  }
+  
+  setTimeout(function() {
+    document.getElementById('expiry-input').focus();
+    showToast('&#9998; Modifica la data e premi Aggiungi');
+  }, 300);
+  
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+}
+
+/**
+ * Ignora
+ */
+function rejectDetectedExpiry() {
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+  showToast('&#10060; Data ignorata, inseriscila manualmente');
+}
+// ============================================================
 // INIZIALIZZAZIONE
 // ============================================================
 if (document.readyState === 'loading') {
