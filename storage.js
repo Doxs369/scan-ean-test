@@ -238,7 +238,7 @@ var Storage = (function() {
   }
 
   /**
-   * Cancella TUTTE le ricette orfane (prodotti non più esistenti)
+   * Cancella TUTTE le ricette orfane (prodotti non piu esistenti)
    */
   function cleanupOrphanRecipes(existingProductIds) {
     try {
@@ -269,6 +269,32 @@ var Storage = (function() {
     }
   }
 
+  /**
+   * Salva categorie personalizzate
+   */
+  function saveCustomCategories(categories) {
+    try {
+      localStorage.setItem(PREFIX + 'customCategories', JSON.stringify(categories));
+      return true;
+    } catch (e) {
+      console.error('Errore salvataggio categorie:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Carica categorie personalizzate
+   */
+  function loadCustomCategories() {
+    try {
+      var data = localStorage.getItem(PREFIX + 'customCategories');
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      console.error('Errore caricamento categorie:', e);
+      return {};
+    }
+  }
+
   // API pubblica
   return {
     saveProducts: saveProducts,
@@ -288,6 +314,8 @@ var Storage = (function() {
     saveRecipes: saveRecipes,
     loadRecipes: loadRecipes,
     deleteRecipes: deleteRecipes,
-    cleanupOrphanRecipes: cleanupOrphanRecipes
+    cleanupOrphanRecipes: cleanupOrphanRecipes,
+    saveCustomCategories: saveCustomCategories,
+    loadCustomCategories: loadCustomCategories
   };
 })();
