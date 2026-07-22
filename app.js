@@ -1,0 +1,2496 @@
+/**
+ * ScanEan - App completa per gestione dispensa
+ * Scanner barcode + Open Food Facts + TheMealDB ricette anti-spreco (IT)
+ */
+
+// ============================================================
+// VARIABILI GLOBALI
+// ============================================================
+var products = [];
+var shoppingList = [];
+var currentFilter = 'all';
+var currentSort = 'expiry';
+var nextId = 1;
+var nextListId = 1;
+var selectedProductId = null;
+var settings = {};
+var isScanning = false;
+var scannedProductData = null;
+var currentBarcode = null;
+var currentImageUrl = null;
+var cameraPhotoData = null;
+var currentRecipeProductId = null;
+var dailyRecipes = null;
+
+var categoryEmojis = {
+  dairy: '&#129371;', meat: '&#129385;', produce: '&#129388;',
+  pantry: '&#129387;', beverages: '&#129380;', frozen: '&#129482;',
+  bakery: '&#127838;', sweets: '&#127852;'
+};
+
+var categoryNames = {
+  dairy: 'Latticini', meat: 'Carne e Pesce', produce: 'Verdura e Frutta',
+  pantry: 'Dispensa', beverages: 'Bevande', frozen: 'Surgelati',
+  bakery: 'Panetteria', sweets: 'Dolci'
+};
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  settings = Storage.loadSettings();
+
+  var savedProducts = Storage.loadProducts();
+  var savedList = Storage.loadShoppingList();
+
+  if (savedProducts && savedProducts.length > 0) {
+    products = savedProducts;
+    nextId = getMaxId(products) + 1;
+  }
+
+  if (savedList && savedList.length > 0) {
+    shoppingList = savedList;
+    nextListId = getMaxId(shoppingList) + 1;
+  }
+
+  runDailyCleanup();
+
+  var savedDaily = RecipesAPI.loadDailyRecipes();
+  if (savedDaily && savedDaily.recipes) {
+    dailyRecipes = savedDaily.recipes;
+  }
+
+  renderProducts();
+  renderShoppingList();
+  updateStats();
+  renderDailyRecipes();
+
+  Camera.init('camera-video');
+  BarcodeScanner.init('camera-video', 'camera-canvas', onBarcodeDetected);
+
+  setTimeout(function() {
+    var splash = document.getElementById('splash');
+    if (splash) splash.classList.add('hidden');
+  }, 1800);
+}
+
+function getMaxId(arr) {
+  var max = 0;
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i].id > max) max = arr[i].id;
+  }
+  return max;
+}
+
+// ============================================================
+// PULIZIA GIORNALIERA
+// ============================================================
+function runDailyCleanup() {
+  var today = new Date().toISOString().split('T')[0];
+  var lastCleanup = localStorage.getItem('scanEan_lastCleanup');
+  if (lastCleanup === today) return;
+
+  var expired = RecipesAPI.getExpiredProducts(products);
+  for (var i = 0; i < expired.length; i++) {
+    var p = expired[i];
+    var alreadyInList = false;
+    for (var j = 0; j < shoppingList.length; j++) {
+      if (shoppingList[j].name === p.name && shoppingList[j].reason === 'Scaduto') {
+        alreadyInList = true;
+        break;
+      }
+    }
+    if (!alreadyInList) {
+      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Scaduto' });
+    }
+    Storage.deleteRecipes(p.id);
+  }
+
+  if (expired.length > 0) {
+    var newProducts = [];
+    for (var k = 0; k < products.length; k++) {
+      var isExpired = false;
+      for (var m = 0; m < expired.length; m++) {
+        if (products[k].id === expired[m].id) { isExpired = true; break; }
+      }
+      if (!isExpired) newProducts.push(products[k]);
+    }
+    products = newProducts;
+    Storage.saveProducts(products);
+    Storage.saveShoppingList(shoppingList);
+  }
+
+  RecipesAPI.cleanupOldRecipes();
+  cleanupRecipes();
+  localStorage.setItem('scanEan_lastCleanup', today);
+
+  if (expired.length > 0) {
+    showToast('&#9888;&#65039; ' + expired.length + ' prodotto/i scaduto/i spostato/i in lista spesa');
+  }
+}
+
+// ============================================================
+// RICETTE DEL GIORNO — SOLO PRODOTTO IN SCADENZA OGGI (IT)
+// ============================================================
+function loadDailyRecipesFromAPI() {
+  var expiringToday = RecipesAPI.getExpiringToday(products);
+  if (expiringToday.length === 0) {
+    dailyRecipes = null;
+    renderDailyRecipes();
+    return;
+  }
+
+  if (dailyRecipes && dailyRecipes.productId === expiringToday[0].id) {
+    renderDailyRecipes();
+    return;
+  }
+
+  var product = expiringToday[0];
+  showToast('&#127860; Cerco ricette per "' + product.name + '"...');
+
+  RecipesAPI.searchByIngredient(product.name)
+    .then(function(recipes) {
+      if (recipes.length > 0) {
+        dailyRecipes = {
+          productName: product.name,
+          productId: product.id,
+          recipes: recipes.slice(0, 5)
+        };
+        RecipesAPI.saveDailyRecipes(dailyRecipes);
+        renderDailyRecipes();
+        showToast('&#9989; ' + recipes.length + ' ricette trovate per ' + product.name + '!');
+      } else {
+        dailyRecipes = { productName: product.name, productId: product.id, recipes: [], noResults: true };
+        RecipesAPI.saveDailyRecipes(dailyRecipes);
+        renderDailyRecipes();
+        showToast('&#128533; Nessuna ricetta trovata per "' + product.name + '"');
+      }
+    });
+}
+
+function renderDailyRecipes() {
+  var container = document.getElementById('daily-recipes-container');
+  if (!container) return;
+
+  var expiringToday = RecipesAPI.getExpiringToday(products);
+
+  if (expiringToday.length === 0) {
+    container.innerHTML =
+      '<div class="recipe-card" style="opacity:0.7;">' +
+        '<div class="recipe-header">' +
+          '<div class="recipe-icon">&#128994;</div>' +
+          '<div>' +
+            '<div class="recipe-title">Nessun prodotto in scadenza oggi</div>' +
+            '<div class="recipe-ingredients">Tutti i tuoi prodotti sono al sicuro!</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  var product = expiringToday[0];
+  var days = getDaysUntilExpiry(product.expiryDate);
+
+  var headerHtml =
+    '<div style="padding:0 16px;margin-bottom:12px;">' +
+      '<div style="font-size:13px;color:var(--text-muted);font-weight:600;">' +
+        '&#9200; Scade ' + (days === 0 ? 'OGGI' : 'tra ' + days + ' gg') + ': <strong style="color:var(--danger);">' + product.name + '</strong>' +
+      '</div>' +
+    '</div>';
+
+  if (!dailyRecipes || dailyRecipes.productId !== product.id) {
+    container.innerHTML = headerHtml +
+      '<div class="recipe-card" style="cursor:pointer;" onclick="loadDailyRecipesFromAPI()">' +
+        '<div class="recipe-header">' +
+          '<div class="recipe-icon">&#127860;</div>' +
+          '<div>' +
+            '<div class="recipe-title">Trova ricette per "' + product.name + '"</div>' +
+            '<div class="recipe-ingredients">Clicca per cercare su TheMealDB</div>' +
+          '</div>' +
+        '</div>' +
+        '<span class="recipe-match">&#128269; Cerca ricette</span>' +
+      '</div>';
+    return;
+  }
+
+  if (dailyRecipes.noResults) {
+    container.innerHTML = headerHtml +
+      '<div class="recipe-card" style="opacity:0.7;">' +
+        '<div class="recipe-header">' +
+          '<div class="recipe-icon">&#128533;</div>' +
+          '<div>' +
+            '<div class="recipe-title">Nessuna ricetta trovata</div>' +
+            '<div class="recipe-ingredients">Prova a cercare manualmente con altri ingredienti</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  var html = headerHtml;
+  for (var i = 0; i < dailyRecipes.recipes.length; i++) {
+    var r = dailyRecipes.recipes[i];
+    html +=
+      '<div class="recipe-card" style="cursor:pointer;" onclick="openMealDBRecipe(' + r.id + ')">' +
+        '<div class="recipe-header">' +
+          '<div class="recipe-img-thumb">' +
+            '<img src="' + r.thumb + '" alt="' + r.title + '" loading="lazy">' +
+          '</div>' +
+          '<div style="min-width:0;">' +
+            '<div class="recipe-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.title + '</div>' +
+            '<div class="recipe-ingredients">&#129379; Usa: ' + product.name + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<span class="recipe-match">&#128073; Tocca per la ricetta</span>' +
+      '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function openMealDBRecipe(recipeId) {
+  showToast('&#9200; Carico dettaglio ricetta...');
+
+  RecipesAPI.getRecipeDetail(recipeId)
+    .then(function(recipe) {
+      if (!recipe) {
+        showToast('&#10060; Ricetta non trovata');
+        return;
+      }
+
+      document.getElementById('recipe-detail-title').textContent = recipe.title;
+
+      var metaHtml = '';
+      if (recipe.category) metaHtml += '<span>&#127860; ' + recipe.category + '</span>';
+      if (recipe.area) metaHtml += '<span>&#127758; ' + recipe.area + '</span>';
+      document.getElementById('recipe-detail-meta').innerHTML = metaHtml;
+
+      var bodyHtml = '';
+
+      if (recipe.thumb) {
+        bodyHtml += '<div style="margin-bottom:16px;">' +
+          '<img src="' + recipe.thumb + '" style="width:100%;border-radius:12px;" alt="' + recipe.title + '">' +
+          '</div>';
+      }
+
+      if (recipe.ingredients && recipe.ingredients.length > 0) {
+        bodyHtml += '<div class="recipe-detail-section">' +
+          '<div class="recipe-detail-section-title">&#129379; Ingredienti</div>' +
+          '<div class="recipe-ingredients-list">';
+        for (var i = 0; i < recipe.ingredients.length; i++) {
+          bodyHtml += '<span class="recipe-ingredient-tag">' + recipe.ingredients[i] + '</span>';
+        }
+        bodyHtml += '</div></div>';
+      }
+
+      if (recipe.instructions && recipe.instructions.length > 0) {
+        bodyHtml += '<div class="recipe-detail-section">' +
+          '<div class="recipe-detail-section-title">&#128221; Preparazione</div>' +
+          '<div class="recipe-steps-list">';
+        for (var j = 0; j < recipe.instructions.length; j++) {
+          bodyHtml += '<div class="recipe-step">' +
+            '<div class="recipe-step-number">' + (j + 1) + '</div>' +
+            '<div class="recipe-step-text">' + recipe.instructions[j] + '</div>' +
+          '</div>';
+        }
+        bodyHtml += '</div></div>';
+      }
+
+      if (recipe.youtube) {
+        bodyHtml += '<div class="recipe-detail-section">' +
+          '<div class="recipe-detail-section-title">&#127909; Video</div>' +
+          '<a href="' + recipe.youtube + '" target="_blank" style="color:var(--primary);font-weight:700;font-size:14px;">&#9654; Guarda su YouTube</a>' +
+          '</div>';
+      }
+
+      document.getElementById('recipe-detail-body').innerHTML = bodyHtml;
+      document.getElementById('recipe-detail-modal').classList.add('show');
+    });
+}
+
+// ============================================================
+// NAVIGAZIONE
+// ============================================================
+function navigateTo(screen) {
+  var screens = document.querySelectorAll('.screen');
+  for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active');
+  var navItems = document.querySelectorAll('.nav-item');
+  for (var j = 0; j < navItems.length; j++) navItems[j].classList.remove('active');
+
+  document.getElementById('screen-' + screen).classList.add('active');
+  if (screen !== 'scanner') {
+    document.getElementById('nav-' + screen).classList.add('active');
+  }
+
+  if (screen === 'list') renderShoppingList();
+  else if (screen === 'pantry') {
+    renderProducts();
+    updateStats();
+    renderDailyRecipes();
+  }
+}
+
+// ============================================================
+// SCANNER + FOTO MANUALE (anche senza API)
+// ============================================================
+function startScanner() {
+  navigateTo('scanner');
+  startCameraAndScan();
+}
+
+function startCameraAndScan() {
+  isScanning = true;
+  document.getElementById('scanner-frame').style.display = 'block';
+  document.getElementById('scanner-hint').innerHTML =
+    'Inquadra il codice a barre<br>Lo scanner lo rilevera automaticamente';
+  document.getElementById('scanner-actions').style.display = 'flex';
+
+  Camera.start()
+    .then(function(info) {
+      console.log('Fotocamera avviata', info);
+      BarcodeScanner.start();
+      if (info.hasTorch) showToast('Torcia disponibile');
+    })
+    .catch(function(err) {
+      console.error('Errore fotocamera:', err);
+      showToast('Fotocamera non disponibile: ' + err.message);
+      // Mostra subito input manuale + foto senza dipendere dalla camera
+      showManualBarcodeAndPhotoInput();
+    });
+}
+
+function stopScanner() {
+  isScanning = false;
+  BarcodeScanner.stop();
+  Camera.stop();
+  closeScanResult();
+}
+
+/**
+ * NUOVO: Mostra input manuale barcode + foto prodotto
+ * Funziona anche se la fotocamera non è disponibile
+ */
+function showManualBarcodeAndPhotoInput() {
+  document.getElementById('scanner-frame').style.display = 'none';
+  document.getElementById('scanner-hint').innerHTML =
+    'Inserisci il codice manualmente o scatta una foto';
+
+  var manualDiv = document.getElementById('manual-barcode-input');
+  if (!manualDiv) {
+    manualDiv = document.createElement('div');
+    manualDiv.id = 'manual-barcode-input';
+    manualDiv.className = 'manual-barcode';
+    manualDiv.style.maxWidth = '320px';
+    manualDiv.innerHTML =
+      '<div style="margin-bottom:12px;">' +
+        '<input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13" style="width:100%;margin-bottom:8px;">' +
+        '<button onclick="processManualBarcode()" style="width:100%;">&#128270; Cerca prodotto</button>' +
+      '</div>' +
+      '<div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">' +
+        '<div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:8px;">Oppure scatta una foto del prodotto</div>' +
+        '<button onclick="openCameraForManualProduct()" style="width:100%;background:var(--accent);">&#128247; Scatta foto prodotto</button>' +
+      '</div>';
+    document.querySelector('.scanner-container').appendChild(manualDiv);
+  }
+  manualDiv.style.display = 'block';
+}
+
+function showManualBarcodeInput() {
+  showManualBarcodeAndPhotoInput();
+}
+
+function processManualBarcode() {
+  var input = document.getElementById('manual-ean');
+  var barcode = input ? input.value.trim() : '';
+
+  if (!barcode || barcode.length < 8) {
+    showToast('Inserisci un codice valido');
+    return;
+  }
+
+  var manualDiv = document.getElementById('manual-barcode-input');
+  if (manualDiv) manualDiv.style.display = 'none';
+
+  processBarcode(barcode);
+}
+
+/**
+ * NUOVO: Apre fotocamera per foto prodotto manuale (senza barcode)
+ */
+function openCameraForManualProduct() {
+  // Usa l'input file nascosto ma senza barcode
+  document.getElementById('camera-input-manual').click();
+}
+
+/**
+ * NUOVO: Gestisce foto prodotto manuale (senza API)
+ */
+function handleManualProductPhoto(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var processPhoto = function(dataUrl) {
+    cameraPhotoData = dataUrl;
+
+    // Prepara dati prodotto manuale
+    scannedProductData = {
+      name: '',
+      emoji: '&#128230;',
+      category: 'pantry',
+      brand: '',
+      barcode: null
+    };
+    currentBarcode = null;
+    currentImageUrl = null;
+
+    // Mostra risultato
+    var resultImg = document.getElementById('result-img');
+    var resultTitle = document.getElementById('result-title');
+    var resultSub = document.getElementById('result-sub');
+    var nameInput = document.getElementById('product-name-input');
+    var expiryInput = document.getElementById('expiry-input');
+    var qtyInput = document.getElementById('qty-input');
+    var btnCamera = document.getElementById('btn-camera');
+    var cameraPreview = document.getElementById('camera-preview');
+
+    cameraPreview.classList.remove('show');
+    cameraPreview.src = '';
+
+    resultImg.innerHTML = '<img src="' + cameraPhotoData + '" alt="Foto prodotto">';
+    resultTitle.textContent = 'Nuovo prodotto';
+    resultSub.innerHTML = 'Foto manuale &bull; Inserisci i dati';
+
+    nameInput.value = '';
+    nameInput.placeholder = 'Inserisci il nome del prodotto...';
+
+    var expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    expiryInput.value = expiry.toISOString().split('T')[0];
+    qtyInput.value = '1';
+
+    btnCamera.style.display = 'none';
+
+    // Nascondi input manuale
+    var manualDiv = document.getElementById('manual-barcode-input');
+    if (manualDiv) manualDiv.style.display = 'none';
+
+    document.getElementById('scan-result').classList.add('show');
+    showToast('&#128247; Foto caricata! Inserisci il nome del prodotto');
+  };
+
+  if (file.size > 500 * 1024) {
+    compressImage(file, 500, processPhoto);
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) { processPhoto(e.target.result); };
+    reader.readAsDataURL(file);
+  }
+
+  event.target.value = '';
+}
+
+function onBarcodeDetected(barcode) {
+  if (!isScanning) return;
+  console.log('Barcode rilevato:', barcode);
+  showToast('Barcode rilevato: ' + barcode);
+  BarcodeScanner.stop();
+  processBarcode(barcode);
+}
+
+function processBarcode(barcode) {
+  document.getElementById('api-loading').style.display = 'block';
+
+  OpenFoodFacts.search(barcode)
+    .then(function(result) {
+      document.getElementById('api-loading').style.display = 'none';
+      if (result.found && result.product) {
+        showProductFound(result.product);
+      } else {
+        showProductNotFound(barcode);
+      }
+    });
+}
+
+function showProductFound(product) {
+  var category = OpenFoodFacts.detectCategory(product);
+  var emoji = OpenFoodFacts.getCategoryEmoji(category);
+
+  scannedProductData = {
+    name: product.name, emoji: emoji, category: category,
+    brand: product.brand, quantity: product.quantity,
+    ingredients: product.ingredients, nutriscore: product.nutriscore,
+    novaGroup: product.novaGroup, nutriments: product.nutriments,
+    servingSize: product.servingSize, barcode: product.barcode
+  };
+
+  currentBarcode = product.barcode;
+  currentImageUrl = product.imageUrl || product.imageFrontUrl || null;
+
+  var resultImg = document.getElementById('result-img');
+  var resultTitle = document.getElementById('result-title');
+  var resultSub = document.getElementById('result-sub');
+  var nameInput = document.getElementById('product-name-input');
+  var expiryInput = document.getElementById('expiry-input');
+  var qtyInput = document.getElementById('qty-input');
+  var btnCamera = document.getElementById('btn-camera');
+  var cameraPreview = document.getElementById('camera-preview');
+
+  cameraPreview.classList.remove('show');
+  cameraPreview.src = '';
+  cameraPhotoData = null;
+
+  if (currentImageUrl) {
+    resultImg.innerHTML = '<img src="' + currentImageUrl + '" alt="' + product.name + '" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=placeholder-text>' + emoji + '</span>\'">';
+    btnCamera.style.display = 'none';
+  } else {
+    resultImg.innerHTML = '<span class="placeholder-text">' + emoji + '</span>';
+    btnCamera.style.display = 'block';
+  }
+
+  resultTitle.textContent = product.name;
+  var subText = 'EAN: ' + product.barcode;
+  if (product.brand) subText += ' &bull; ' + product.brand;
+  if (product.quantity) subText += ' &bull; ' + product.quantity;
+  resultSub.innerHTML = subText;
+
+  nameInput.value = product.name;
+
+  var expiry = new Date();
+  expiry.setDate(expiry.getDate() + 30);
+  expiryInput.value = expiry.toISOString().split('T')[0];
+  qtyInput.value = '1';
+
+  document.getElementById('scan-result').classList.add('show');
+  Storage.saveProducts(products);
+}
+
+function showProductNotFound(barcode) {
+  currentBarcode = barcode;
+  currentImageUrl = null;
+
+  scannedProductData = {
+    name: 'Prodotto ' + barcode, emoji: '&#128230;',
+    category: 'pantry', brand: '', barcode: barcode
+  };
+
+  var resultImg = document.getElementById('result-img');
+  var resultTitle = document.getElementById('result-title');
+  var resultSub = document.getElementById('result-sub');
+  var nameInput = document.getElementById('product-name-input');
+  var expiryInput = document.getElementById('expiry-input');
+  var qtyInput = document.getElementById('qty-input');
+  var btnCamera = document.getElementById('btn-camera');
+  var cameraPreview = document.getElementById('camera-preview');
+
+  cameraPreview.classList.remove('show');
+  cameraPreview.src = '';
+  cameraPhotoData = null;
+
+  resultImg.innerHTML = '<span class="placeholder-text">&#128230;</span>';
+  resultTitle.textContent = 'Prodotto non trovato';
+  resultSub.innerHTML = 'EAN: ' + barcode + '<br>Inserisci i dati manualmente o scatta una foto';
+
+  nameInput.value = '';
+  nameInput.placeholder = 'Inserisci il nome del prodotto...';
+
+  var expiry = new Date();
+  expiry.setDate(expiry.getDate() + 30);
+  expiryInput.value = expiry.toISOString().split('T')[0];
+  qtyInput.value = '1';
+
+  btnCamera.style.display = 'block';
+  document.getElementById('scan-result').classList.add('show');
+}
+
+function closeScanResult() {
+  stopExpiryScan();
+  terminateExpiryOCR();
+  document.getElementById('scan-result').classList.remove('show');
+  scannedProductData = null;
+  currentBarcode = null;
+  currentImageUrl = null;
+  cameraPhotoData = null;
+
+  if (isScanning && document.getElementById('screen-scanner').classList.contains('active')) {
+    BarcodeScanner.start();
+  }
+}
+
+// ============================================================
+// FOTO CAMERA
+// ============================================================
+function openCamera() {
+  document.getElementById('camera-input').click();
+}
+
+function handleCameraPhoto(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var processPhoto = function(dataUrl) {
+    cameraPhotoData = dataUrl;
+    var preview = document.getElementById('camera-preview');
+    preview.src = cameraPhotoData;
+    preview.classList.add('show');
+    var resultImg = document.getElementById('result-img');
+    resultImg.innerHTML = '<img src="' + cameraPhotoData + '" alt="Foto prodotto">';
+    showToast('&#128247; Foto aggiunta!');
+  };
+
+  if (file.size > 500 * 1024) {
+    compressImage(file, 500, processPhoto);
+  } else {
+    var reader = new FileReader();
+    reader.onload = function(e) { processPhoto(e.target.result); };
+    reader.readAsDataURL(file);
+  }
+
+  event.target.value = '';
+}
+
+function compressImage(file, maxKB, callback) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      var scale = Math.min(1, 400 / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      var quality = 0.7;
+      var dataUrl;
+      do {
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+        quality -= 0.1;
+      } while (dataUrl.length > maxKB * 1024 * 1.37 && quality > 0.2);
+      callback(dataUrl);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ============================================================
+// AGGIUNGI PRODOTTO
+// ============================================================
+/**
+ * Rileva la categoria dal nome del prodotto (per prodotti manuali)
+ */
+function detectCategoryFromName(name) {
+  if (!name) return null;
+  var text = name.toLowerCase();
+
+  // ===== LATTICINI =====
+  var dairyKw = [
+    'latte', 'formaggio', 'yogurt', 'yoghurt', 'latticino', 'latticini',
+    'mozzarella', 'parmigiano', 'ricotta', 'burro', 'panna', 'pannette',
+    'pannarello', 'caffè', 'caffe', 'coffee cream', 'coffee creamer',
+    'latte condensato', 'latte in polvere', 'latte fresco', 'latte uht',
+    'latte intero', 'latte scremato', 'latte parzialmente scremato',
+    'latte di soia', 'latte di riso', 'latte di mandorla', 'latte di avena',
+    'latte di cocco', 'latte vegetale', 'bevanda vegetale',
+    'formaggio spalmabile', 'formaggio fresco', 'formaggio stagionato',
+    'formaggio grattugiato', 'formaggio fuso', 'formaggio cremoso',
+    'stracchino', 'mascarpone', 'gorgonzola', 'pecorino', 'grana',
+    'scamorza', 'provola', 'caciocavallo', 'fontina', 'taleggio',
+    'robiola', 'brie', 'camembert', 'emmental', 'edam', 'gouda',
+    'feta', 'halloumi', 'yogurt greco', 'yogurt intero', 'yogurt magro',
+    'yogurt bianco', 'yogurt alla frutta', 'kefir', 'fermentato',
+    'gelato', 'sorbetto', 'semifreddo', 'crema', 'crema pasticcera',
+    'crema chantilly', 'crema inglese', 'philadelphia', 'spalmabile',
+    'whipped cream', 'sour cream', 'double cream', 'single cream',
+    'clotted cream', 'crème fraîche', 'crème fraiche',
+    'butter', 'margarina', 'margarine', 'olio di burro',
+    'dulce de leche', 'cajeta', 'confettura di latte',
+    'milk', 'cheese', 'dairy', 'cream', 'yogurt', 'yoghurt',
+    'butter', 'margarine', 'ghee', 'kefir', 'quark',
+    'cheddar', 'swiss cheese', 'cottage cheese', 'cream cheese',
+    'sour cream', 'whipping cream', 'heavy cream', 'half and half',
+    'evaporated milk', 'condensed milk', 'powdered milk', 'dry milk',
+    'skim milk', 'whole milk', 'low fat milk',
+    'soy milk', 'almond milk', 'oat milk', 'rice milk', 'coconut milk',
+    'plant milk', 'plant-based milk', 'non-dairy milk',
+    'ice cream', 'frozen yogurt', 'frozen custard',
+    'whey', 'casein', 'lactose', 'lactose-free',
+    'probiotic', 'probiotics', 'fermented milk',
+    'fromage', 'lait', 'crème', 'beurre', 'yaourt',
+    'queso', 'leche', 'crema', 'mantequilla', 'yogur',
+    'käse', 'milch', 'sahne', 'butter', 'joghurt',
+    'latte intero', 'latte scremato', 'latte in polvere',
+    'burro anidro', 'caseina', 'siero di latte', 'whey protein',
+    'lattosio', 'lactose', 'fermenti lattici', 'starter culture'
+  ];
+  for (var d = 0; d < dairyKw.length; d++) {
+    if (text.indexOf(dairyKw[d]) !== -1) return 'dairy';
+  }
+
+  // ===== CARNE E PESCE =====
+  var meatKw = [
+    'carne', 'pesce', 'pollo', 'salmone', 'tonno', 'prosciutto',
+    'bresaola', 'wurstel', 'salsiccia', 'bistecca', 'hamburger',
+    'manzo', 'maiale', 'agnello', 'vitello', 'tacchino', 'anatra',
+    'coniglio', 'cervo', 'cinghiale', 'fagiano', 'quaglia',
+    'salsiccia', 'salame', 'mortadella', 'bologna', 'cotechino',
+    'zampone', 'pancetta', 'guanciale', 'lardo', 'speck',
+    'jamón', 'jamon', 'chorizo', 'soppressa', 'nduja',
+    'filetto', 'costata', 'costoletta', 'spiedino', 'spiedini',
+    'hamburger', 'hamburgers', 'burger', 'cheeseburger',
+    'hot dog', 'hotdog', 'frankfurter', 'frankfurters',
+    'cotoletta', 'scaloppina', 'brasato', 'stufato', 'ragù',
+    'sugo di carne', 'brodo di carne', 'brodo di pollo',
+    'brodo di manzo', 'dado', 'dadi', 'brodo granulare',
+    'gambero', 'gamberi', 'gamberetto', 'gamberetti',
+    'aragosta', 'astice', 'granchio', 'polpo', 'calamaro',
+    'calamari', 'seppia', 'seppie', 'cozza', 'cozze',
+    'vongola', 'vongole', 'ostrica', 'ostriche', 'capasanta',
+    'sardina', 'sardine', 'acciuga', 'acciughe', 'alaccia',
+    'sgombro', 'merluzzo', 'nasello', 'rombo', 'orata',
+    'branzino', 'spigola', 'dentice', 'mormora', 'pagello',
+    'triglia', 'scorfano', 'razza', 'squalo', 'pesce spada',
+    'pesce azzurro', 'pesce fresco', 'pesce surgelato',
+    'surimi', 'fish stick', 'fish sticks',
+    'fish finger', 'fish fingers', 'bastoncini di pesce',
+    'burger di pesce', 'burger di pollo', 'nugget', 'nuggets',
+    'crocchetta', 'crocchette', 'polpetta', 'polpette',
+    'polpettone', 'salsiccia', 'salsicce',
+    'salsicciotto', 'salsicciotti', 'soppressata',
+    'meat', 'beef', 'pork', 'lamb', 'veal', 'turkey', 'duck',
+    'chicken', 'fish', 'seafood', 'steak', 'fillet', 'fillet',
+    'bacon', 'ham', 'sausage', 'salami', 'pepperoni',
+    'meatball', 'meatballs', 'patty', 'patties',
+    'ground beef', 'minced meat', 'mince', 'meatloaf',
+    'roast beef', 'roast pork', 'roast chicken', 'roast lamb',
+    'ribs', 'rib', 'chop', 'chops', 'tenderloin',
+    'sirloin', 'rump', 'flank', 'brisket', 'shank',
+    'oxtail', 'tripe', 'liver', 'kidney', 'heart',
+    'shrimp', 'prawn', 'prawns', 'lobster', 'crab',
+    'scallop', 'scallops', 'mussel', 'mussels', 'clam', 'clams',
+    'oyster', 'oysters', 'octopus', 'squid', 'calamari',
+    'anchovy', 'anchovies', 'sardine', 'sardines',
+    'mackerel', 'cod', 'haddock', 'hake', 'plaice',
+    'sole', 'turbot', 'halibut', 'tuna', 'tuna fish',
+    'swordfish', 'marlin', 'mahi mahi', 'snapper',
+    'grouper', 'barramundi', 'trout', 'salmon',
+    'smoked salmon', 'gravlax', 'lox', 'caviar', 'roe',
+    'surimi', 'fish cake', 'fish cakes', 'crab cake', 'crab cakes',
+    'fish stick', 'fish sticks', 'fish finger', 'fish fingers',
+    'chicken nugget', 'chicken nuggets', 'chicken tender',
+    'chicken tenders', 'chicken wing', 'chicken wings',
+    'drumstick', 'drumsticks', 'thigh', 'thighs', 'breast', 'breasts',
+    'whole chicken', 'rotisserie chicken', 'roasted chicken',
+    'fried chicken', 'bbq chicken', 'grilled chicken',
+    'beef jerky', 'biltong', 'dried meat', 'cured meat',
+    'charcuterie', 'deli meat', 'lunch meat', 'cold cuts',
+    'pâté', 'pate', 'terrine', 'rillettes', 'foie gras',
+    'viande', 'poisson', 'boeuf', 'porc', 'agneau', 'veau',
+    'poulet', 'canard', 'dinde', 'lapin', 'gibier',
+    'carne', 'pescado', 'pollo', 'pavo', 'pato', 'conejo',
+    'fleisch', 'fisch', 'rind', 'schwein', 'lamm', 'kalb',
+    'hähnchen', 'ente', 'truthahn', 'kaninchen',
+    'vlees', 'vis', 'rundvlees', 'varkensvlees', 'lam',
+    'kip', 'eend', 'kalkoen', 'konijn'
+  ];
+  for (var m = 0; m < meatKw.length; m++) {
+    if (text.indexOf(meatKw[m]) !== -1) return 'meat';
+  }
+
+  // ===== VERDURA E FRUTTA =====
+  var produceKw = [
+    'verdura', 'frutta', 'frutto', 'ortaggio', 'ortaggi',
+    'insalata', 'pomodoro', 'pomodori', 'spinaci', 'zucchina',
+    'zucchine', 'melanzana', 'melanzane', 'carota', 'carote',
+    'peperone', 'peperoni', 'peperoncino', 'peperoncini',
+    'cipolla', 'cipolle', 'aglio', 'patata', 'patate',
+    'finocchio', 'finocchi', 'cavolo', 'cavoli', 'broccoli',
+    'cavolfiore', 'cavolini', 'cavolo nero', 'cavolo cappuccio',
+    'lattuga', 'lattughe', 'rucola', 'indivia', 'radicchio',
+    'scarola', 'catalogna', 'bietola', 'bietole', 'spinacio',
+    'porro', 'porri', 'sedano', 'sedani', 'sedano rapa',
+    'prezzemolo', 'basilico', 'rosmarino', 'salvia', 'menta',
+    'timo', 'origano', 'dragoncello', 'erba cipollina',
+    'zucca', 'zucche', 'zuccone', 'butternut', 'delica',
+    'cetriolo', 'cetrioli', 'barbabietola', 'barbabietole',
+    'rapa', 'rape', 'rapanelli', 'ravanello', 'ravanelli',
+    'topinambur', 'carciofo', 'carciofi', 'asparago', 'asparagi',
+    'fagiolino', 'fagiolini', 'taccole', 'pisello', 'piselli',
+    'fava', 'fave', 'ceci', 'lenticchie', 'fagioli',
+    'soia', 'edamame', 'tofu', 'tempeh', 'seitan',
+    'fungo', 'funghi', 'champignon', 'porcino', 'porcini',
+    'pleurotus', 'shiitake', 'maitake', 'tartufo', 'tartufi',
+    'mela', 'mele', 'pera', 'pere', 'banana', 'banane',
+    'arancia', 'arance', 'mandarino', 'mandarini', 'clementina',
+    'clementine', 'pompelmo', 'pompelmi', 'limone', 'limoni',
+    'lime', 'kiwi', 'kiwifruit', 'ananas', 'mango', 'manghi',
+    'papaya', 'passion fruit', 'frutto della passione', 'maracuja',
+    'litchi', 'lychee', 'rambutan', 'longan', 'durian',
+    'cocco', 'noce di cocco', 'dattero', 'datteri', 'fico', 'fichi',
+    'uva', 'uvetta', 'sultanina', 'prugna', 'prugne', 'albicocca',
+    'albicocche', 'pesca', 'pesche', 'nettarina', 'nettarine',
+    'ciliegia', 'ciliegie', 'amarena', 'amarene', 'fragola',
+    'fragole', 'lampone', 'lamponi', 'mirtillo', 'mirtilli',
+    'ribes', 'ribes nero', 'ribes rosso', 'mora', 'more',
+    'mirtillo', 'mirtilli', 'cranberry', 'cranberries',
+    'goji', 'acai', 'baobab', 'camu camu',
+    'melone', 'meloni', 'anguria', 'cocomero', 'cocomeri',
+    'papaia', 'guava', 'feijoa', 'jujube', 'carambola',
+    'pitaya', 'dragon fruit', 'jackfruit', 'breadfruit',
+    'avocado', 'avocado', 'oliva', 'olive',
+    'pomodoro ciliegino', 'pomodorini', 'datterino', 'datterini',
+    'san marzano', 'cuore di bue', 'costoluto', 'pachino',
+    'basilico', 'prezzemolo', 'menta', 'rosmarino',
+    'salvia', 'timo', 'origano', 'dragoncello',
+    'erba cipollina', 'aneto', 'coriandolo',
+    'alghe', 'alga', 'nori', 'wakame', 'kombu', 'dulse',
+    'spirulina', 'chlorella', 'kelp', 'sea vegetable',
+    'vegetable', 'vegetables', 'fruit', 'fruits', 'produce',
+    'greens', 'leafy greens', 'salad', 'salads',
+    'tomato', 'tomatoes', 'spinach', 'zucchini', 'courgette',
+    'eggplant', 'aubergine', 'carrot', 'carrots', 'pepper', 'peppers',
+    'onion', 'onions', 'garlic', 'potato', 'potatoes',
+    'fennel', 'cabbage', 'broccoli', 'cauliflower', 'brussels sprout',
+    'brussels sprouts', 'kale', 'collard', 'collards',
+    'lettuce', 'arugula', 'rocket', 'endive', 'radicchio',
+    'escarole', 'chicory', 'beet', 'beets', 'beetroot', 'beetroots',
+    'chard', 'swiss chard', 'leek', 'leeks', 'celery',
+    'parsley', 'basil', 'rosemary', 'sage', 'mint',
+    'thyme', 'oregano', 'tarragon', 'chive', 'chives',
+    'dill', 'cilantro', 'coriander', 'lemongrass',
+    'pumpkin', 'squash', 'butternut squash', 'acorn squash',
+    'spaghetti squash', 'delicata', 'hubbard',
+    'cucumber', 'cucumbers', 'pickle', 'pickles', 'gherkin',
+    'turnip', 'turnips', 'rutabaga', 'swede', 'daikon',
+    'radish', 'radishes', 'horseradish', 'wasabi',
+    'jerusalem artichoke', 'sunchokes', 'artichoke', 'artichokes',
+    'asparagus', 'green bean', 'green beans', 'snap pea', 'snap peas',
+    'snow pea', 'snow peas', 'pea', 'peas', 'chickpea', 'chickpeas',
+    'lentil', 'lentils', 'bean', 'beans', 'black bean', 'black beans',
+    'kidney bean', 'kidney beans', 'pinto bean', 'pinto beans',
+    'navy bean', 'navy beans', 'cannellini', 'borlotti',
+    'soybean', 'soybeans', 'soy', 'edamame', 'tofu', 'tempeh',
+    'mushroom', 'mushrooms', 'button mushroom', 'portobello',
+    'oyster mushroom', 'oyster mushrooms', 'enoki', 'enokitake',
+    'maitake', 'hen of the woods', 'morel', 'morels',
+    'truffle', 'truffles', 'porcini', 'chanterelle', 'chanterelles',
+    'apple', 'apples', 'pear', 'pears', 'banana', 'bananas',
+    'orange', 'oranges', 'mandarin', 'mandarins', 'tangerine',
+    'tangerines', 'clementine', 'clementines', 'satsuma',
+    'grapefruit', 'grapefruits', 'lemon', 'lemons', 'lime', 'limes',
+    'kiwi', 'kiwis', 'kiwifruit', 'pineapple', 'pineapples',
+    'mango', 'mangoes', 'mangos', 'papaya', 'papayas',
+    'passion fruit', 'passionfruit', 'passion fruits',
+    'lychee', 'lychees', 'rambutan', 'rambutans', 'longan',
+    'durian', 'durians', 'coconut', 'coconuts',
+    'date', 'dates', 'fig', 'figs', 'grape', 'grapes',
+    'raisin', 'raisins', 'sultana', 'sultanas', 'currant', 'currants',
+    'plum', 'plums', 'prune', 'prunes', 'apricot', 'apricots',
+    'peach', 'peaches', 'nectarine', 'nectarines',
+    'cherry', 'cherries', 'sour cherry', 'sour cherries',
+    'strawberry', 'strawberries', 'raspberry', 'raspberries',
+    'blueberry', 'blueberries', 'blackberry', 'blackberries',
+    'currant', 'currants', 'gooseberry', 'gooseberries',
+    'cranberry', 'cranberries', 'goji berry', 'goji berries',
+    'acai', 'baobab', 'camu camu',
+    'melon', 'melons', 'watermelon', 'watermelons', 'cantaloupe',
+    'honeydew', 'honeydew melon', 'galia', 'galia melon',
+    'guava', 'guavas', 'feijoa', 'feijoas', 'jujube', 'jujubes',
+    'star fruit', 'starfruit', 'carambola', 'carambolas',
+    'dragon fruit', 'dragonfruit', 'pitaya', 'pitayas',
+    'jackfruit', 'jackfruits', 'breadfruit', 'breadfruits',
+    'avocado', 'avocados', 'olive', 'olives',
+    'cherry tomato', 'cherry tomatoes', 'grape tomato', 'grape tomatoes',
+    'roma tomato', 'roma tomatoes', 'beefsteak tomato',
+    'heirloom tomato', 'heirloom tomatoes',
+    'baby spinach', 'baby greens', 'microgreens', 'sprouts',
+    'alfalfa', 'broccoli sprout', 'broccoli sprouts',
+    'seaweed', 'nori', 'wakame', 'kombu', 'dulse', 'arame',
+    'spirulina', 'chlorella', 'kelp', 'sea vegetable', 'sea vegetables',
+    'legume', 'legumes', 'pulse', 'pulses',
+    'légume', 'légumes', 'fruit', 'fruits',
+    'verdura', 'verdure', 'frutta', 'frutti', 'ortaggio', 'ortaggi',
+    'gemüse', 'obst', 'gemüse', 'obst',
+    'groente', 'fruit', 'groenten', 'vruchten'
+  ];
+  for (var p = 0; p < produceKw.length; p++) {
+    if (text.indexOf(produceKw[p]) !== -1) return 'produce';
+  }
+
+  // ===== BEVANDE =====
+  var beverageKw = [
+    'bevanda', 'bevande', 'bibita', 'bibite', 'vino', 'vini',
+    'acqua', 'acque', 'succo', 'succhi', 'birra', 'birre',
+    'spumante', 'spumanti', 'liquore', 'liquori', 'cocktail',
+    'aperitivo', 'aperitivi', 'digestivo', 'digestivi',
+    'soda', 'gassata', 'gasata', 'naturale', 'minerale',
+    'acqua minerale', 'acqua oligominerale', 'acqua leggermente frizzante',
+    'acqua frizzante', 'acqua gassata', 'acqua tonica',
+    'tonic', 'tonic water', 'soda water', 'club soda',
+    'cola', 'pepsi', 'fanta', 'sprite', 'seven up', '7up',
+    'aranciata', 'limonata', 'chinotto', 'cedrata',
+    'energy drink', 'energy', 'red bull', 'monster', 'rockstar',
+    'powerade', 'gatorade', 'isotonica', 'isotonic',
+    'smoothie', 'smoothies', 'frullato', 'frullati',
+    'shake', 'shakes', 'milkshake', 'milkshakes',
+    'caffè', 'caffe', 'espresso', 'cappuccino', 'macchiato',
+    'latte macchiato', 'americano', 'ristretto', 'lungo',
+    'moka', 'caffè in grani', 'caffè macinato', 'caffè solubile',
+    'nespresso', 'dolce gusto', 'lavazza', 'illy', 'kimbo',
+    'tè', 'te', 'tea', 'tisana', 'tisane', 'infuso', 'infusi',
+    'camomilla', 'menta', 'limone', 'frutti di bosco',
+    'cioccolata calda', 'cioccolata', 'orzo', 'orzata',
+    'ginseng', 'guaranà', 'guarana', 'mate', 'yerba mate',
+    'kombucha', 'kefir drink', 'kefir da bere',
+    'sake', 'soju', 'vodka', 'whisky', 'whiskey', 'rum',
+    'gin', 'tequila', 'mezcal', 'brandy', 'cognac', 'armagnac',
+    'grappa', 'sambuca', 'amaro', 'amari', 'limoncello',
+    'marsala', 'porto', 'sherry', 'vermouth', 'vermut',
+    'prosecco', 'champagne', 'franciacorta', 'lambrusco',
+    'rosé', 'rose', 'bianco', 'rosso', 'bianco frizzante',
+    'vino bianco', 'vino rosso', 'vino rosato', 'vino dolce',
+    'vino secco', 'vino frizzante', 'vino spumante',
+    'birra bionda', 'birra rossa', 'birra scura', 'birra artigianale',
+    'birra ipa', 'birra lager', 'birra pils', 'birra weiss',
+    'birra stout', 'birra porter', 'birra ale', 'birra belga',
+    'beverage', 'beverages', 'drink', 'drinks', 'wine', 'wines',
+    'water', 'waters', 'juice', 'juices', 'beer', 'beers',
+    'sparkling', 'liquor', 'liquors', 'spirit', 'spirits',
+    'soft drink', 'soft drinks', 'fizzy drink', 'fizzy drinks',
+    'carbonated', 'non-carbonated', 'still water',
+    'mineral water', 'spring water', 'sparkling water',
+    'tonic water', 'soda water', 'club soda', 'seltzer',
+    'cola', 'pepsi', 'fanta', 'sprite', '7up', 'seven up',
+    'orange soda', 'lemon soda', 'ginger ale', 'root beer',
+    'energy drink', 'energy drinks', 'sports drink', 'sports drinks',
+    'isotonic', 'electrolyte', 'electrolytes',
+    'smoothie', 'smoothies', 'fruit smoothie', 'green smoothie',
+    'shake', 'shakes', 'milkshake', 'milkshakes', 'protein shake',
+    'coffee', 'coffees', 'espresso', 'cappuccino', 'latte',
+    'americano', 'macchiato', 'mocha', 'flat white', 'cortado',
+    'cold brew', 'iced coffee', 'frappuccino',
+    'tea', 'teas', 'green tea', 'black tea', 'white tea',
+    'oolong', 'pu-erh', 'herbal tea', 'chai', 'matcha',
+    'chamomile', 'peppermint', 'peppermint tea', 'hibiscus',
+    'hot chocolate', 'cocoa', 'drinking chocolate',
+    'barley drink', 'barley coffee', 'chicory coffee',
+    'kombucha', 'water kefir', 'ginger beer', 'ginger ale',
+    'sake', 'soju', 'vodka', 'whisky', 'whiskey', 'rum',
+    'gin', 'tequila', 'mezcal', 'brandy', 'cognac',
+    'grappa', 'sambuca', 'amaro', 'limoncello',
+    'port', 'sherry', 'vermouth', 'martini', 'negroni',
+    'aperol', 'campari', 'prosecco', 'champagne',
+    'white wine', 'red wine', 'rosé wine', 'rose wine',
+    'sparkling wine', 'dessert wine', 'fortified wine',
+    'pale ale', 'india pale ale', 'ipa', 'lager', 'pilsner',
+    'pils', 'weiss', 'weizen', 'hefeweizen', 'stout', 'porter',
+    'amber ale', 'brown ale', 'bitter', ' mild', 'barley wine',
+    'cider', 'perry', 'mead', 'sangria', 'mulled wine',
+    'boisson', 'boissons', 'vin', 'vins', 'eau', 'eaux',
+    'jus', 'jus de', 'bière', 'bières', 'liqueur', 'liqueurs',
+    'spiritueux', 'champagne', 'prosecco',
+    'bebida', 'bebidas', 'vino', 'vinos', 'agua', 'aguas',
+    'zumo', 'zumos', 'cerveza', 'cervezas', 'licor', 'licores',
+    'getränk', 'getränke', 'wein', 'weine', 'wasser', 'wässer',
+    'saft', 'säfte', 'bier', 'biere', 'likör', 'liköre',
+    'drank', 'dranken', 'wijn', 'wijnen', 'water', 'waters',
+    'sap', 'sappen', 'bier', 'bieren', 'likeur', 'likeuren'
+  ];
+  for (var b = 0; b < beverageKw.length; b++) {
+    if (text.indexOf(beverageKw[b]) !== -1) return 'beverages';
+  }
+
+  // ===== SURGELATI =====
+  var frozenKw = [
+    'surgelato', 'surgelati', 'congelato', 'congelati', 'frozen',
+    'gelato', 'gelati', 'sorbetto', 'sorbetti', 'semifreddo', 'semifreddi',
+    'frozen yogurt', 'frozen custard', 'ice cream',
+    'surghi', 'surgo', 'congelatore', 'freezer', 'deep freeze',
+    'frozen pizza', 'frozen meal', 'frozen dinner', 'tv dinner',
+    'frozen vegetable', 'frozen vegetables', 'frozen fruit', 'frozen fruits',
+    'frozen fish', 'frozen meat', 'frozen chicken', 'frozen seafood',
+    'frozen potato', 'frozen potatoes', 'frozen fry', 'frozen fries',
+    'frozen pea', 'frozen peas', 'frozen bean', 'frozen beans',
+    'frozen berry', 'frozen berries', 'frozen spinach',
+    'frozen corn', 'frozen broccoli', 'frozen cauliflower',
+    'frozen green bean', 'frozen carrot', 'frozen carrots',
+    'frozen mixed vegetable', 'frozen mixed vegetables', 'frozen stir fry',
+    'frozen dumpling', 'frozen dumplings', 'frozen gyoza',
+    'frozen spring roll', 'frozen spring rolls', 'frozen samosa',
+    'frozen pastry', 'frozen pastries', 'frozen croissant',
+    'frozen bread', 'frozen dough', 'frozen pie', 'frozen tart',
+    'frozen cake', 'frozen dessert', 'frozen treat',
+    'sur congelé', 'congelé', 'congelés', 'glace', 'glaces',
+    'sorbet', 'sorbets', 'frozen', 'tiefgefroren', 'tiefkühl',
+    'tiefgekühlt', 'tiefkühlkost', 'tiefkühlprodukt',
+    'diepvries', 'diepgevroren', 'ingevroren', 'vrieskast'
+  ];
+  for (var f = 0; f < frozenKw.length; f++) {
+    if (text.indexOf(frozenKw[f]) !== -1) return 'frozen';
+  }
+
+  // ===== PANETTERIA =====
+  var bakeryKw = [
+    'pane', 'pani', 'fette', 'fetta', 'biscotto', 'biscotti',
+    'cracker', 'crackers', 'grissino', 'grissini', 'tarallo', 'taralli',
+    'focaccia', 'focacce', 'ciabatta', 'ciabatte', 'baguette', 'baguettes',
+    'bagel', 'bagels', 'brioche', 'brioches', 'cornetto', 'cornetti',
+    'croissant', 'croissants', 'pain au chocolat', 'viennoiserie',
+    'donut', 'donuts', 'ciambella', 'ciambelle', 'bombolone', 'bomboloni',
+    'muffin', 'muffins', 'scone', 'scones', 'pancake', 'pancakes',
+    'waffle', 'waffles', 'crespella', 'crespelle', 'crepe', 'crepes',
+    'torta', 'torte', 'crostata', 'crostate', 'pasticceria', 'pasticcerie',
+    'pasta sfoglia', 'pasta brisée', 'pasta frolla', 'sfoglia',
+    'pizza', 'pizze', 'pizzetta', 'pizzette', 'focaccia', 'focacce',
+    'piadina', 'piadine', 'tigella', 'tigelle', 'crescentina', 'crescentine',
+    'gnocco', 'gnocchi', 'gnocco fritto', 'tigelle',
+    'pagnotta', 'pagnotte', 'filone', 'filoni', 'ciabatta',
+    'pane integrale', 'pane bianco', 'pane di segale', 'pane nero',
+    'pane ai cereali', 'pane multicereali', 'pane di farro',
+    'pane di kamut', 'pane senza glutine', 'pane gluten free',
+    'fette biscottate', 'rusk', 'rusks', 'zwieback', 'melba toast',
+    'cracker', 'crackers', 'grissino', 'grissini', 'tarallo', 'taralli',
+    'pretzel', 'pretzels', 'breadstick', 'breadsticks',
+    'croccantino', 'croccantini', 'crostino', 'crostini',
+    'bruschetta', 'bruschette', 'crostini', 'crostino',
+    'bread', 'breads', 'loaf', 'loaves', 'roll', 'rolls',
+    'bun', 'buns', 'bagel', 'bagels', 'baguette', 'baguettes',
+    'ciabatta', 'focaccia', 'sourdough', 'rye bread', 'whole wheat bread',
+    'multigrain bread', 'white bread', 'brown bread',
+    'pita', 'pitas', 'naan', 'flatbread', 'flatbreads',
+    'tortilla', 'tortillas', 'wrap', 'wraps', 'lavash',
+    'croissant', 'croissants', 'pain au chocolat', 'danish', 'danishes',
+    'pastry', 'pastries', 'muffin', 'muffins', 'donut', 'donuts',
+    'doughnut', 'doughnuts', 'scone', 'scones', 'biscuit', 'biscuits',
+    'cookie', 'cookies', 'brownie', 'brownies', 'blondie', 'blondies',
+    'cake', 'cakes', 'cupcake', 'cupcakes', 'layer cake', 'pound cake',
+    'sponge cake', 'angel food cake', 'chiffon cake',
+    'cheesecake', 'cheesecakes', 'tiramisu', 'tiramisù',
+    'pie', 'pies', 'tart', 'tarts', 'quiche', 'quiches',
+    'flan', 'flans', 'custard tart', 'fruit tart',
+    'pizza', 'pizzas', 'calzone', 'calzones', 'stromboli',
+    'bread', 'brot', 'brötchen', 'brötchen', 'baguette',
+    'pain', 'pains', 'viennoiserie', 'pâtisserie',
+    'pan', 'panes', 'bollería', 'bollo', 'bollos',
+    'brood', 'broden', 'broodje', 'broodjes', 'stokbrood'
+  ];
+  for (var ba = 0; ba < bakeryKw.length; ba++) {
+    if (text.indexOf(bakeryKw[ba]) !== -1) return 'bakery';
+  }
+
+  // ===== DOLCI =====
+  var sweetsKw = [
+    'dolce', 'dolci', 'cioccolato', 'cioccolata', 'cioccolatini',
+    'caramella', 'caramelle', 'caramello', 'caramellato',
+    'bonbon', 'bonbons', 'pralina', 'praline', 'truffle', 'truffles',
+    'tartufo', 'tartufi', 'gianduiotto', 'gianduiotti',
+    'bacio', 'baci', 'baci perugina', 'ferrero rocher',
+    'nutella', 'crema spalmabile alle nocciole',
+    'crema di nocciole', 'nocciolata', 'gianduja', 'gianduia',
+    'cioccolato fondente', 'cioccolato al latte', 'cioccolato bianco',
+    'tavoletta', 'tavolette', 'cioccolatino', 'cioccolatini',
+    'caramella', 'caramelle', 'caramello', 'caramellato',
+    'lecca lecca', 'lecca-lecca', 'lollipop', 'lollipops',
+    'gomma da masticare', 'chewing gum', 'bubble gum',
+    'caramella gommosa', 'caramelle gommose', 'gummy', 'gummies',
+    'caramella dura', 'caramelle dure', 'hard candy',
+    'caramella mou', 'caramelle mou', 'toffee', 'toffees',
+    'fudge', 'fudges', 'nougat', 'nougats', 'torrone',
+    'marzapane', 'marzapane', 'pasta di mandorle',
+    'confetto', 'confetti', 'dragee', 'dragees',
+    'caramella alla menta', 'mint candy', 'caramella alla frutta',
+    'jelly bean', 'jelly beans', 'candy cane', 'candy canes',
+    'marshmallow', 'marshmallows', 'meringa', 'meringhe',
+    'macaron', 'macarons', 'macaroon', 'macaroons',
+    'biscotto', 'biscotti', 'biscotto al cioccolato',
+    'biscotto alla vaniglia', 'biscotto al burro',
+    'frollino', 'frollini', 'biscotto secco', 'biscotti secchi',
+    'wafer', 'wafers', 'wafer al cioccolato', 'wafer alla nocciola',
+    'ferrero', 'kinder', 'kinder bueno', 'kinder surprise',
+    'kinder egg', 'kinder cioccolato', 'kinder delice',
+    'milka', 'lindt', 'lindor', 'godiva', 'guylian',
+    'after eight', 'after eight', 'raffaello', 'raffaello',
+    'ferrero collection', 'ferrero rocher', 'mon chéri',
+    'sweet', 'sweets', 'candy', 'candies', 'chocolate', 'chocolates',
+    'confectionery', 'confectionaries', 'sugar', 'sugary',
+    'candy bar', 'candy bars', 'chocolate bar', 'chocolate bars',
+    'truffle', 'truffles', 'praline', 'pralines', 'bonbon', 'bonbons',
+    'gummy bear', 'gummy bears', 'gummy worm', 'gummy worms',
+    'jelly baby', 'jelly babies', 'liquorice', 'licorice',
+    'black jack', 'fruit salad', 'wine gum', 'wine gums',
+    'peppermint', 'spearmint', 'eucalyptus', 'menthol',
+    'caramel', 'caramels', 'butterscotch', 'fudge', 'fudges',
+    'nougat', 'nougats', 'marzipan', 'marzipans',
+    ' Turkish delight', 'lokum', 'halva', 'halvah',
+    'pastry', 'pastries', 'danish', 'danishes', 'turnover', 'turnovers',
+    'strudel', 'strudels', 'baklava', 'baklavas',
+    'mochi', 'mochis', 'wagashi', 'wagashis',
+    'confiserie', 'confiseries', 'chocolat', 'chocolats',
+    'bonbon', 'bonbons', 'sucre', 'sucré', 'sucreries',
+    'dulce', 'dulces', 'chocolate', 'chocolates', 'caramelo', 'caramelos',
+    'süßigkeit', 'süßigkeiten', 'schokolade', 'schokoladen',
+    'bonbon', 'bonbons', 'praline', 'pralinen', 'nougat',
+    'snoep', 'snoepjes', 'snoepgoed', 'chocolade', 'chocolades',
+    'bonbon', 'bonbons', 'praline', 'pralines'
+  ];
+  for (var s = 0; s < sweetsKw.length; s++) {
+    if (text.indexOf(sweetsKw[s]) !== -1) return 'sweets';
+  }
+
+  return null;
+}
+
+function addProduct() {
+  if (!scannedProductData) return;
+
+  var name = document.getElementById('product-name-input').value.trim();
+  var expiry = document.getElementById('expiry-input').value;
+  var qty = parseInt(document.getElementById('qty-input').value) || 1;
+
+  if (!name) {
+    showToast('&#9888;&#65039; Inserisci il nome del prodotto');
+    return;
+  }
+
+  var finalImageUrl = cameraPhotoData || currentImageUrl || null;
+
+  // Rileva categoria dal nome anche per prodotti manuali
+  var detectedCategory = detectCategoryFromName(name);
+  var category = detectedCategory || scannedProductData.category || 'pantry';
+  var emoji = OpenFoodFacts.getCategoryEmoji(category) || scannedProductData.emoji || '&#128230;';
+
+  var newProduct = {
+    id: nextId++,
+    name: name,
+    emoji: emoji,
+    category: category,
+    expiryDate: expiry,
+    qty: qty,
+    barcode: currentBarcode,
+    imageUrl: finalImageUrl,
+    addedAt: new Date().toISOString().split('T')[0],
+    brand: scannedProductData.brand || '',
+    ingredients: scannedProductData.ingredients || '',
+    nutriscore: scannedProductData.nutriscore || '',
+    novaGroup: scannedProductData.novaGroup || '',
+    nutriments: scannedProductData.nutriments || {},
+    servingSize: scannedProductData.servingSize || ''
+  };
+
+  products.unshift(newProduct);
+  Storage.saveProducts(products);
+
+  closeScanResult();
+  stopScanner();
+  navigateTo('pantry');
+  renderProducts();
+  updateStats();
+  renderDailyRecipes();
+  showToast('&#9989; ' + name + ' aggiunto!');
+}
+
+// ============================================================
+// PRODOTTI + ORDINAMENTO
+// ============================================================
+function getDaysUntilExpiry(expiryDate) {
+  var today = new Date();
+  today.setHours(0,0,0,0);
+  var exp = new Date(expiryDate);
+  exp.setHours(0,0,0,0);
+  return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+}
+
+function getStatusBadge(product) {
+  var days = getDaysUntilExpiry(product.expiryDate);
+  if (days < 0) return '<span class="expiry-badge danger">&#9940; Scaduto</span>';
+  if (days === 0) return '<span class="expiry-badge danger">&#128308; Oggi</span>';
+  if (days <= 3) return '<span class="expiry-badge warning">&#128993; ' + days + ' gg</span>';
+  return '<span class="expiry-badge safe">&#128994; ' + days + ' gg</span>';
+}
+
+function sortProducts(list) {
+  var sorted = [];
+  for (var i = 0; i < list.length; i++) sorted.push(list[i]);
+
+  sorted.sort(function(a, b) {
+    if (currentSort === 'expiry') {
+      var da = getDaysUntilExpiry(a.expiryDate);
+      var db = getDaysUntilExpiry(b.expiryDate);
+      return da - db;
+    }
+    if (currentSort === 'name') {
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    }
+    if (currentSort === 'added') {
+      return new Date(b.addedAt) - new Date(a.addedAt);
+    }
+    if (currentSort === 'category') {
+      var catA = categoryNames[a.category] || 'Altro';
+      var catB = categoryNames[b.category] || 'Altro';
+      if (catA !== catB) return catA.localeCompare(catB);
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    }
+    return 0;
+  });
+
+  return sorted;
+}
+
+function renderProducts() {
+  var list = document.getElementById('products-list');
+  var filtered = [];
+  for (var i = 0; i < products.length; i++) filtered.push(products[i]);
+
+  if (currentFilter !== 'all') {
+    if (currentFilter === 'expiring') {
+      var temp = [];
+      for (var k = 0; k < filtered.length; k++) {
+        if (getDaysUntilExpiry(filtered[k].expiryDate) <= 3 && getDaysUntilExpiry(filtered[k].expiryDate) >= 0) {
+          temp.push(filtered[k]);
+        }
+      }
+      filtered = temp;
+    } else if (currentFilter === 'expired') {
+      var tempE = [];
+      for (var e = 0; e < filtered.length; e++) {
+        if (getDaysUntilExpiry(filtered[e].expiryDate) < 0) tempE.push(filtered[e]);
+      }
+      filtered = tempE;
+    } else {
+      var temp2 = [];
+      for (var m = 0; m < filtered.length; m++) {
+        if (filtered[m].category === currentFilter) temp2.push(filtered[m]);
+      }
+      filtered = temp2;
+    }
+  }
+
+  var searchInput = document.getElementById('searchInput');
+  var searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+  if (searchTerm) {
+    var temp3 = [];
+    for (var n = 0; n < filtered.length; n++) {
+      if (filtered[n].name.toLowerCase().indexOf(searchTerm) !== -1) temp3.push(filtered[n]);
+    }
+    filtered = temp3;
+  }
+
+  filtered = sortProducts(filtered);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128230;</div><div class="empty-state-title">Nessun prodotto</div><div class="empty-state-desc">Usa lo scanner per aggiungere il tuo primo prodotto!</div></div>';
+    return;
+  }
+
+  var html = '';
+  for (var idx = 0; idx < filtered.length; idx++) {
+    var p = filtered[idx];
+    var imgHtml = p.imageUrl ? '<img src="' + p.imageUrl + '" alt="' + p.name + '" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'' + (p.emoji || '&#128230;') + '\'">' : (p.emoji || '&#128230;');
+    html += '<div class="product-card" style="animation-delay:' + (idx * 0.03) + 's" onclick="openProductModal(' + p.id + ')">' +
+      '<div class="product-img">' + imgHtml + '</div>' +
+      '<div class="product-info">' +
+        '<div class="product-name">' + p.name + '</div>' +
+        '<div class="product-meta">' + getStatusBadge(p) + '<span>Scade: ' + formatDate(p.expiryDate) + '</span></div>' +
+      '</div>' +
+      '<div class="product-qty">' + p.qty + '</div>' +
+    '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function updateStats() {
+  var statTotal = document.getElementById('stat-total');
+  var statWarning = document.getElementById('stat-warning');
+  var statExpired = document.getElementById('stat-expired');
+
+  if (statTotal) statTotal.textContent = products.length;
+  var warningCount = 0;
+  var expiredCount = 0;
+  for (var i = 0; i < products.length; i++) {
+    var d = getDaysUntilExpiry(products[i].expiryDate);
+    if (d >= 0 && d <= 3) warningCount++;
+    if (d < 0) expiredCount++;
+  }
+  if (statWarning) statWarning.textContent = warningCount;
+  if (statExpired) statExpired.textContent = expiredCount;
+
+  updateStatCardsClickHandler();
+}
+
+function updateStatCardsClickHandler() {
+  var statCards = document.querySelectorAll('.stat-card');
+  if (statCards.length >= 3) {
+    statCards[0].onclick = function() {
+      currentFilter = 'all';
+      resetChips();
+      renderProducts();
+      showToast('&#128230; Tutti i prodotti');
+    };
+    statCards[0].style.cursor = 'pointer';
+
+    statCards[1].onclick = function() {
+      currentFilter = 'expiring';
+      resetChips();
+      var chips = document.querySelectorAll('.chip');
+      for (var i = 0; i < chips.length; i++) {
+        if (chips[i].getAttribute('data-cat') === 'expiring') chips[i].classList.add('active');
+      }
+      renderProducts();
+      showToast('&#9200; Prodotti in scadenza');
+    };
+    statCards[1].style.cursor = 'pointer';
+
+    statCards[2].onclick = function() {
+      currentFilter = 'expired';
+      resetChips();
+      renderProducts();
+      showToast('&#9940; Prodotti scaduti');
+    };
+    statCards[2].style.cursor = 'pointer';
+  }
+}
+
+function resetChips() {
+  var chips = document.querySelectorAll('.chip');
+  for (var i = 0; i < chips.length; i++) chips[i].classList.remove('active');
+}
+
+function filterProducts(category, chip) {
+  currentFilter = category;
+  resetChips();
+  chip.classList.add('active');
+  renderProducts();
+}
+
+// ============================================================
+// MODAL ORDINAMENTO
+// ============================================================
+function openSortModal() {
+  // Aggiorna stato visivo
+  var options = ['expiry', 'name', 'added', 'category'];
+  for (var i = 0; i < options.length; i++) {
+    var opt = document.getElementById('sort-' + options[i]);
+    var check = document.getElementById('check-' + options[i]);
+    if (opt && check) {
+      if (currentSort === options[i]) {
+        opt.classList.add('active');
+        check.classList.remove('hidden');
+      } else {
+        opt.classList.remove('active');
+        check.classList.add('hidden');
+      }
+    }
+  }
+  document.getElementById('sort-modal').classList.add('show');
+}
+
+function closeSortModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('sort-modal').classList.remove('show');
+  }
+}
+
+function closeSortModalDirect() {
+  document.getElementById('sort-modal').classList.remove('show');
+}
+
+function setSort(criteria) {
+  currentSort = criteria;
+  renderProducts();
+  closeSortModalDirect();
+
+  var labels = {
+    expiry: '&#9200; Ordinato per scadenza',
+    name: '&#128218; Ordinato per nome',
+    added: '&#128197; Ordinato per data inserimento',
+    category: '&#128451; Ordinato per categoria'
+  };
+  showToast(labels[criteria] || 'Ordinamento aggiornato');
+}
+
+// ============================================================
+// MODAL PRODOTTO + INFO (dettagli API)
+// ============================================================
+function openProductModal(id) {
+  selectedProductId = id;
+  var product = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === id) { product = products[i]; break; }
+  }
+  if (!product) return;
+
+  var days = getDaysUntilExpiry(product.expiryDate);
+  var modalImg = document.getElementById('modal-img');
+
+  if (product.imageUrl) {
+    modalImg.innerHTML = '<img src="' + product.imageUrl + '" alt="' + product.name + '" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + (product.emoji || '&#128230;') + '\'">';
+  } else {
+    modalImg.innerHTML = product.emoji || '&#128230;';
+  }
+
+  document.getElementById('modal-title').textContent = product.name;
+  document.getElementById('modal-sub').textContent = product.barcode ? 'EAN: ' + product.barcode : 'Prodotto manuale';
+  document.getElementById('modal-badge').innerHTML = getStatusBadge(product);
+
+  var catEmoji = categoryEmojis[product.category] || '&#128230;';
+  var catName = categoryNames[product.category] || 'Altro';
+
+  var detailsHtml =
+    '<div class="detail-row"><span class="detail-label">Categoria</span><span class="detail-value">' + catEmoji + ' ' + catName + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">Quantita</span><span class="detail-value">' + product.qty + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">Data scadenza</span><span class="detail-value">' + formatDate(product.expiryDate) + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">Giorni rimanenti</span><span class="detail-value">' + days + '</span></div>';
+
+  if (product.brand) {
+    detailsHtml += '<div class="detail-row"><span class="detail-label">Marca</span><span class="detail-value">' + product.brand + '</span></div>';
+  }
+
+  detailsHtml += '<div class="detail-row"><span class="detail-label">Aggiunto il</span><span class="detail-value">' + formatDate(product.addedAt) + '</span></div>';
+
+  document.getElementById('modal-details').innerHTML = detailsHtml;
+
+  // Salva prodotto corrente per il tasto INFO
+  window.currentModalProduct = product;
+
+  document.getElementById('product-modal').classList.add('show');
+}
+
+function closeProductModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('product-modal').classList.remove('show');
+    selectedProductId = null;
+    window.currentModalProduct = null;
+  }
+}
+
+function deleteProduct() {
+  showDeleteConfirm();
+}
+
+function consumeProduct() {
+  if (selectedProductId === null) return;
+  var p = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === selectedProductId) { p = products[i]; break; }
+  }
+  if (!p) return;
+
+  // Aggiungi alla lista spesa
+  shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Consumato' });
+  Storage.saveShoppingList(shoppingList);
+
+  Storage.deleteRecipes(selectedProductId);
+
+  var newProducts = [];
+  for (var j = 0; j < products.length; j++) {
+    if (products[j].id !== selectedProductId) newProducts.push(products[j]);
+  }
+  products = newProducts;
+  Storage.saveProducts(products);
+
+  document.getElementById('product-modal').classList.remove('show');
+  renderProducts();
+  updateStats();
+  renderDailyRecipes();
+  showToast('&#9989; "' + p.name + '" aggiunto alla lista della spesa');
+  selectedProductId = null;
+  window.currentModalProduct = null;
+}
+
+function deleteProductOnly() {
+  if (selectedProductId === null) return;
+  var p = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === selectedProductId) { p = products[i]; break; }
+  }
+  if (!p) return;
+
+  Storage.deleteRecipes(selectedProductId);
+
+  var newProducts = [];
+  for (var j = 0; j < products.length; j++) {
+    if (products[j].id !== selectedProductId) newProducts.push(products[j]);
+  }
+  products = newProducts;
+  Storage.saveProducts(products);
+  document.getElementById('product-modal').classList.remove('show');
+  renderProducts();
+  updateStats();
+  renderDailyRecipes();
+  cleanupRecipes();
+  showToast('&#128465; "' + p.name + '" rimosso definitivamente');
+  selectedProductId = null;
+  window.currentModalProduct = null;
+}
+
+// === MODAL CONFERMA PERSONALIZZATO ===
+var confirmCallbackPrimary = null;
+var confirmCallbackSecondary = null;
+
+function showConfirmModal(title, desc, icon, primaryText, primaryCallback, secondaryText, secondaryCallback) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-desc').textContent = desc;
+  document.getElementById('confirm-icon').innerHTML = icon;
+
+  var btnPrimary = document.getElementById('confirm-btn-primary');
+  var btnDanger = document.getElementById('confirm-btn-danger');
+
+  btnPrimary.innerHTML = primaryText;
+  btnDanger.innerHTML = secondaryText;
+
+  confirmCallbackPrimary = primaryCallback;
+  confirmCallbackSecondary = secondaryCallback;
+
+  document.getElementById('confirm-modal').classList.add('show');
+}
+
+function closeConfirmModal(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('confirm-modal').classList.remove('show');
+  confirmCallbackPrimary = null;
+  confirmCallbackSecondary = null;
+}
+
+function handleConfirmPrimary(e) {
+  e.stopPropagation();
+  closeConfirmModal();
+  if (confirmCallbackPrimary) confirmCallbackPrimary();
+}
+
+function handleConfirmDanger(e) {
+  e.stopPropagation();
+  closeConfirmModal();
+  if (confirmCallbackSecondary) confirmCallbackSecondary();
+}
+
+function handleConfirmCancel(e) {
+  e.stopPropagation();
+  closeConfirmModal();
+}
+
+function showConsumeConfirm() {
+  if (selectedProductId === null) return;
+  var p = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === selectedProductId) { p = products[i]; break; }
+  }
+  if (!p) return;
+
+  showConfirmModal(
+    p.name,
+    'Cosa vuoi fare con questo prodotto?',
+    '&#128722;',
+    '&#9989; Aggiungi alla lista spesa',
+    function() { consumeProduct(); },
+    '&#128465; Rimuovi definitivamente',
+    function() { deleteProductOnly(); }
+  );
+}
+
+function showDeleteConfirm() {
+  if (selectedProductId === null) return;
+  var p = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === selectedProductId) { p = products[i]; break; }
+  }
+  if (!p) return;
+
+  showConfirmModal(
+    p.name,
+    'Cosa vuoi fare con questo prodotto?',
+    '&#128465;',
+    '&#9989; Aggiungi alla lista spesa',
+    function() {
+      // Aggiungi alla lista spesa con reason diverso
+      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Rimosso dalla dispensa' });
+      Storage.saveShoppingList(shoppingList);
+
+      Storage.deleteRecipes(selectedProductId);
+
+      var newProducts = [];
+      for (var j = 0; j < products.length; j++) {
+        if (products[j].id !== selectedProductId) newProducts.push(products[j]);
+      }
+      products = newProducts;
+      Storage.saveProducts(products);
+      document.getElementById('product-modal').classList.remove('show');
+      renderProducts();
+      updateStats();
+      renderDailyRecipes();
+      cleanupRecipes();
+      showToast('&#9989; "' + p.name + '" aggiunto alla lista della spesa');
+      selectedProductId = null;
+      window.currentModalProduct = null;
+    },
+    '&#128465; Rimuovi definitivamente',
+    function() { deleteProductOnly(); }
+  );
+}
+
+/**
+ * NUOVO: Apre modal INFO con tutti i dettagli API del prodotto
+ */
+function openProductInfo() {
+  var product = window.currentModalProduct;
+  if (!product) return;
+
+  // Chiudi modal prodotto principale
+  document.getElementById('product-modal').classList.remove('show');
+
+  var infoImg = document.getElementById('info-img');
+  if (product.imageUrl) {
+    infoImg.innerHTML = '<img src="' + product.imageUrl + '" alt="' + product.name + '" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + (product.emoji || '&#128230;') + '\'">';
+  } else {
+    infoImg.innerHTML = product.emoji || '&#128230;';
+  }
+
+  document.getElementById('info-title').textContent = product.name;
+  document.getElementById('info-sub').textContent = product.barcode ? 'EAN: ' + product.barcode : 'Prodotto inserito manualmente';
+
+  var bodyHtml = '';
+
+  // Immagini multiple se disponibili
+  if (product.imageFrontUrl || product.imageIngredientsUrl || product.imageNutritionUrl) {
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#128247; Immagini</div>' +
+      '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">';
+    if (product.imageFrontUrl) {
+      bodyHtml += '<img src="' + product.imageFrontUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:12px;flex-shrink:0;" alt="Fronte">';
+    }
+    if (product.imageIngredientsUrl) {
+      bodyHtml += '<img src="' + product.imageIngredientsUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:12px;flex-shrink:0;" alt="Ingredienti">';
+    }
+    if (product.imageNutritionUrl) {
+      bodyHtml += '<img src="' + product.imageNutritionUrl + '" style="width:100px;height:100px;object-fit:cover;border-radius:12px;flex-shrink:0;" alt="Nutrizione">';
+    }
+    bodyHtml += '</div></div>';
+  }
+
+  // Ingredienti
+  if (product.ingredients) {
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#129379; Ingredienti</div>' +
+      '<div style="font-size:14px;color:var(--text-primary);line-height:1.6;">' + product.ingredients + '</div>' +
+      '</div>';
+  }
+
+  // Valori nutrizionali
+  if (product.nutriments && Object.keys(product.nutriments).length > 0) {
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#127789; Valori Nutrizionali (per 100g)</div>' +
+      '<div class="nutri-grid">';
+
+    var nutriLabels = {
+      energyKcal: 'Energia (kcal)', energyKj: 'Energia (kJ)',
+      fat: 'Grassi', saturatedFat: 'Grassi saturi',
+      carbohydrates: 'Carboidrati', sugars: 'Zuccheri',
+      proteins: 'Proteine', salt: 'Sale', fiber: 'Fibre'
+    };
+
+    for (var key in product.nutriments) {
+      var val = product.nutriments[key];
+      if (val !== '' && val !== null && val !== undefined) {
+        bodyHtml += '<div class="nutri-item">' +
+          '<div class="nutri-label">' + (nutriLabels[key] || key) + '</div>' +
+          '<div class="nutri-value">' + val + '</div>' +
+          '</div>';
+      }
+    }
+    bodyHtml += '</div></div>';
+  }
+
+  // Nutri-Score
+  if (product.nutriscore) {
+    var scoreColors = { a: '#038141', b: '#85BB2F', c: '#FECB02', d: '#EE8100', e: '#E63E11' };
+    var scoreColor = scoreColors[product.nutriscore.toLowerCase()] || 'var(--text-muted)';
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#127941; Nutri-Score</div>' +
+      '<div style="display:flex;gap:4px;">';
+    var scores = ['A', 'B', 'C', 'D', 'E'];
+    for (var s = 0; s < scores.length; s++) {
+      var isActive = scores[s].toLowerCase() === product.nutriscore.toLowerCase();
+      bodyHtml += '<div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:white;' +
+        (isActive ? 'background:' + scoreColor + ';transform:scale(1.15);box-shadow:0 2px 8px rgba(0,0,0,0.2);' : 'background:#ddd;opacity:0.5;') + '">' +
+        scores[s] + '</div>';
+    }
+    bodyHtml += '</div></div>';
+  }
+
+  // Nova Group
+  if (product.novaGroup) {
+    var novaColors = { 1: '#00AA00', 2: '#FFCC00', 3: '#FF6600', 4: '#FF0000' };
+    var novaColor = novaColors[product.novaGroup] || 'var(--text-muted)';
+    var novaLabels = { 1: 'Alimenti non trasformati', 2: 'Ingredienti culinari', 3: 'Alimenti trasformati', 4: 'Prodotti ultra-trasformati' };
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#127919; Gruppo NOVA</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:' + novaColor + ';color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;">' + product.novaGroup + '</div>' +
+        '<div style="font-size:13px;color:var(--text-secondary);font-weight:600;">' + (novaLabels[product.novaGroup] || 'Gruppo ' + product.novaGroup) + '</div>' +
+      '</div></div>';
+  }
+
+  // Porzione
+  if (product.servingSize) {
+    bodyHtml += '<div class="info-section">' +
+      '<div class="info-section-title">&#129379; Porzione</div>' +
+      '<div style="font-size:14px;color:var(--text-primary);font-weight:600;">' + product.servingSize + '</div>' +
+      '</div>';
+  }
+
+  document.getElementById('info-body').innerHTML = bodyHtml;
+  document.getElementById('info-modal').classList.add('show');
+}
+
+function closeInfoModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('info-modal').classList.remove('show');
+  }
+}
+
+function closeInfoModalDirect() {
+  document.getElementById('info-modal').classList.remove('show');
+}
+
+// ============================================================
+// LISTA DELLA SPESA
+// ============================================================
+function renderShoppingList() {
+  var list = document.getElementById('shopping-list');
+  var total = shoppingList.length;
+  var checked = 0;
+  for (var i = 0; i < shoppingList.length; i++) {
+    if (shoppingList[i].checked) checked++;
+  }
+  var pct = total === 0 ? 0 : Math.round((checked / total) * 100);
+
+  var progressText = document.getElementById('progress-text');
+  var progressPct = document.getElementById('progress-pct');
+  var progressBar = document.getElementById('progress-bar');
+
+  if (progressText) progressText.textContent = checked + '/' + total + ' completati';
+  if (progressPct) progressPct.textContent = pct + '%';
+  if (progressBar) progressBar.style.width = pct + '%';
+
+  if (total === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128722;</div><div class="empty-state-title">Lista vuota</div><div class="empty-state-desc">I prodotti consumati o scaduti appariranno qui automaticamente.</div></div>';
+    return;
+  }
+
+  var html = '';
+  for (var idx = 0; idx < shoppingList.length; idx++) {
+    var item = shoppingList[idx];
+    var reasonEmoji = item.reason === 'Scaduto' ? '&#9940;' : (item.reason === 'Consumato' ? '&#9989;' : '&#129302;');
+    html += '<div class="list-item" style="animation-delay:' + (idx * 0.03) + 's">' +
+      '<div class="checkbox ' + (item.checked ? 'checked' : '') + '" onclick="toggleCheck(' + item.id + ')"></div>' +
+      '<div style="flex:1">' +
+        '<div class="list-item-text ' + (item.checked ? 'checked' : '') + '">' + item.name + '</div>' +
+        '<div class="list-item-reason">' + reasonEmoji + ' ' + item.reason + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function toggleCheck(id) {
+  for (var i = 0; i < shoppingList.length; i++) {
+    if (shoppingList[i].id === id) {
+      shoppingList[i].checked = !shoppingList[i].checked;
+      break;
+    }
+  }
+  Storage.saveShoppingList(shoppingList);
+  renderShoppingList();
+}
+
+function addListItem() {
+  var input = document.getElementById('newItemInput');
+  var name = input.value.trim();
+  if (!name) return;
+  shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente' });
+  input.value = '';
+  Storage.saveShoppingList(shoppingList);
+  renderShoppingList();
+  showToast('&#9989; ' + name + ' aggiunto');
+}
+
+// ============================================================
+// RICETTE (LEGACY)
+// ============================================================
+
+
+
+
+function closeRecipeDetailModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('recipe-detail-modal').classList.remove('show');
+    currentRecipeProductId = null;
+  }
+}
+
+function closeRecipeDetailModalDirect() {
+  document.getElementById('recipe-detail-modal').classList.remove('show');
+  currentRecipeProductId = null;
+}
+
+function deleteProductRecipes(productId) {
+  Storage.deleteRecipes(productId);
+}
+
+function cleanupRecipes() {
+  var ids = [];
+  for (var i = 0; i < products.length; i++) ids.push(products[i].id);
+  var removed = Storage.cleanupOrphanRecipes(ids);
+  if (removed > 0) console.log('Pulite ' + removed + ' ricette orfane');
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function formatDate(dateStr) {
+  var d = new Date(dateStr);
+  var day = String(d.getDate()).padStart(2, '0');
+  var month = String(d.getMonth() + 1).padStart(2, '0');
+  var year = d.getFullYear();
+  return day + '/' + month + '/' + year;
+}
+
+function showToast(msg) {
+  var toast = document.getElementById('toast');
+  toast.innerHTML = msg;
+  toast.classList.add('show');
+  setTimeout(function() {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+function toggleTorch() {
+  Camera.toggleTorch()
+    .then(function(on) {
+      showToast(on ? '&#128294; Torcia ON' : '&#128294; Torcia OFF');
+    })
+    .catch(function(err) {
+      showToast('Torcia non supportata');
+    });
+}
+
+function captureBarcode() {
+  var frameData = BarcodeScanner.scanFrame();
+  if (frameData) {
+    showToast('&#128247; Frame catturato, analisi...');
+    // Prova a decodificare il frame con ZXing se disponibile
+    if (BarcodeScanner.isReady()) {
+      showToast('&#128270; Scansione in corso...');
+    } else {
+      showManualBarcodeAndPhotoInput();
+    }
+  } else {
+    showManualBarcodeAndPhotoInput();
+  }
+}
+// ============================================================
+// RILEVAMENTO DATA SCADENZA - SISTEMA IBRIDO CON SPINNER
+// Fase 1: scansione automatica continua (max 10 tentativi)
+// Fase 2: se non rileva, passa automaticamente a foto singola
+// Spinner nel bottone durante analisi
+// ============================================================
+var expiryOCRWorker = null;
+var detectedExpiryDate = null;
+var detectedExpiryConfidence = 0;
+var expiryPhotoData = null;
+var expiryCameraStream = null;
+var expiryScanInterval = null;
+var isExpiryScanning = false;
+var lastOCRTime = 0;
+var ocrAttemptCount = 0;
+var maxAutoAttempts = 10;
+var tesseractLoaded = false;
+var tesseractLoading = false;
+var isOCRLoading = false;
+
+/**
+ * Mostra lo spinner nel bottone "Scansiona data scadenza"
+ */
+function showScanButtonSpinner() {
+  var btnText = document.getElementById('btn-scan-text');
+  var btnSpinner = document.getElementById('btn-scan-spinner');
+  if (btnText) btnText.textContent = 'Analizzo...';
+  if (btnSpinner) btnSpinner.style.display = 'inline-block';
+}
+
+/**
+ * Nasconde lo spinner nel bottone
+ */
+function hideScanButtonSpinner() {
+  var btnText = document.getElementById('btn-scan-text');
+  var btnSpinner = document.getElementById('btn-scan-spinner');
+  if (btnText) btnText.innerHTML = '&#128247; Scansiona data scadenza';
+  if (btnSpinner) btnSpinner.style.display = 'none';
+}
+
+/**
+ * Carica Tesseract.js dinamicamente dalla CDN
+ */
+function loadTesseractJS() {
+  return new Promise(function(resolve, reject) {
+    if (tesseractLoaded && typeof Tesseract !== 'undefined') {
+      resolve(Tesseract);
+      return;
+    }
+    if (tesseractLoading) {
+      var checkInterval = setInterval(function() {
+        if (tesseractLoaded && typeof Tesseract !== 'undefined') {
+          clearInterval(checkInterval);
+          resolve(Tesseract);
+        }
+      }, 200);
+      return;
+    }
+
+    tesseractLoading = true;
+    showToast('&#128247; Carico motore OCR...');
+    var script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    script.onload = function() {
+      tesseractLoaded = true;
+      tesseractLoading = false;
+      console.log('Tesseract.js caricato');
+      resolve(typeof Tesseract !== 'undefined' ? Tesseract : null);
+    };
+    script.onerror = function(err) {
+      tesseractLoading = false;
+      console.error('Errore caricamento Tesseract.js:', err);
+      reject(new Error('Impossibile caricare Tesseract.js'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+/**
+ * Inizializza il worker Tesseract.js v5
+ */
+function initExpiryOCR() {
+  if (expiryOCRWorker) return Promise.resolve();
+
+  return new Promise(function(resolve, reject) {
+    loadTesseractJS()
+      .then(function(Tess) {
+        if (!Tess || !Tess.createWorker) {
+          reject(new Error('Tesseract.js non disponibile'));
+          return;
+        }
+        return Tess.createWorker('eng', 1, {
+          logger: function(m) { console.log('Tesseract:', m); }
+        });
+      })
+      .then(function(worker) {
+        if (worker) {
+          expiryOCRWorker = worker;
+          console.log('Tesseract.js v5 worker pronto');
+          resolve();
+        }
+      })
+      .catch(function(err) {
+        console.error('Errore inizializzazione Tesseract:', err);
+        reject(err);
+      });
+  });
+}
+
+/**
+ * Preprocessing semplificato dell'immagine per OCR
+ */
+function preprocessForOCR(sourceCanvas) {
+  var w = sourceCanvas.width;
+  var h = sourceCanvas.height;
+
+  var canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(sourceCanvas, 0, 0);
+
+  var imgData = ctx.getImageData(0, 0, w, h);
+  var data = imgData.data;
+  var len = data.length;
+
+  for (var i = 0; i < len; i += 4) {
+    var gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+    data[i] = data[i+1] = data[i+2] = gray;
+  }
+
+  var minVal = 255, maxVal = 0;
+  for (var j = 0; j < len; j += 4) {
+    if (data[j] < minVal) minVal = data[j];
+    if (data[j] > maxVal) maxVal = data[j];
+  }
+
+  var range = maxVal - minVal;
+  if (range < 1) range = 1;
+
+  for (var k = 0; k < len; k += 4) {
+    var stretched = ((data[k] - minVal) / range) * 255;
+    data[k] = data[k+1] = data[k+2] = stretched;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+}
+
+/**
+ * Avvia la fotocamera per la scansione della data
+ */
+function scanExpiryDate() {
+  var btn = document.getElementById('btn-scan-expiry');
+  var statusDiv = document.getElementById('expiry-scan-status');
+
+  btn.disabled = true;
+  statusDiv.style.display = 'block';
+  showScanButtonSpinner();
+
+  showToast('&#128247; Avvio scansione automatica...');
+
+  var video = document.getElementById('expiry-camera-video');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    hideScanButtonSpinner();
+    showToast('&#10060; Fotocamera non supportata');
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false
+  })
+  .then(function(stream) {
+    expiryCameraStream = stream;
+    video.srcObject = stream;
+    video.style.display = 'block';
+
+    document.getElementById('expiry-camera-overlay').classList.add('active');
+
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+
+    isExpiryScanning = true;
+    ocrAttemptCount = 0;
+    startAutoExpiryScan();
+  })
+  .catch(function(err) {
+    hideScanButtonSpinner();
+    console.error('Errore fotocamera data:', err);
+    showToast('&#10060; Errore fotocamera: ' + err.message);
+    btn.disabled = false;
+    statusDiv.style.display = 'none';
+  });
+}
+
+/**
+ * FASE 1: Scansione automatica continua (max 10 tentativi)
+ */
+function startAutoExpiryScan() {
+  if (!isExpiryScanning) return;
+
+  document.getElementById('expiry-ocr-loading').classList.add('active');
+  isOCRLoading = true;
+
+  initExpiryOCR()
+    .then(function() {
+      document.getElementById('expiry-ocr-loading').classList.remove('active');
+      isOCRLoading = false;
+      expiryScanInterval = setInterval(analyzeExpiryFrameAuto, 600);
+      showToast('&#128247; Scansione automatica... Inquadra la data');
+    })
+    .catch(function(err) {
+      document.getElementById('expiry-ocr-loading').classList.remove('active');
+      isOCRLoading = false;
+      hideScanButtonSpinner();
+      console.error('Tesseract init failed:', err);
+      showToast('&#10060; OCR non disponibile: ' + (err.message || 'errore sconosciuto'));
+      closeExpiryCamera();
+    });
+}
+
+/**
+ * Analizza frame in modalita automatica
+ */
+function analyzeExpiryFrameAuto() {
+  if (!isExpiryScanning || !expiryOCRWorker) return;
+
+  var now = Date.now();
+  if (now - lastOCRTime < 500) return;
+  lastOCRTime = now;
+
+  ocrAttemptCount++;
+
+  var video = document.getElementById('expiry-camera-video');
+  if (!video || !video.videoWidth) return;
+
+  var statusDiv = document.getElementById('expiry-camera-status');
+  if (statusDiv) statusDiv.textContent = 'Auto ' + ocrAttemptCount + '/' + maxAutoAttempts;
+
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  expiryPhotoData = canvas.toDataURL('image/jpeg', 0.9);
+
+  var cropCanvas = document.createElement('canvas');
+  var cropCtx = cropCanvas.getContext('2d');
+  var cropX = canvas.width * 0.05;
+  var cropY = canvas.height * 0.25;
+  var cropW = canvas.width * 0.9;
+  var cropH = canvas.height * 0.5;
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  var processedCanvas = preprocessForOCR(cropCanvas);
+
+  var finalCanvas = document.createElement('canvas');
+  var finalCtx = finalCanvas.getContext('2d');
+  var scale = 2;
+  finalCanvas.width = processedCanvas.width * scale;
+  finalCanvas.height = processedCanvas.height * scale;
+  finalCtx.imageSmoothingEnabled = false;
+  finalCtx.drawImage(processedCanvas, 0, 0, finalCanvas.width, finalCanvas.height);
+
+  var ocrImageData = finalCanvas.toDataURL('image/jpeg', 0.95);
+
+  expiryOCRWorker.recognize(ocrImageData, {}, { text: true })
+    .then(function(result) {
+      if (!isExpiryScanning) return;
+
+      var text = (result.data && result.data.text) ? result.data.text.trim() : '';
+      var confidence = (result.data && result.data.confidence) ? result.data.confidence : 0;
+
+      console.log('Auto OCR attempt', ocrAttemptCount, 'text:', text, 'conf:', confidence);
+
+      if (statusDiv) statusDiv.textContent = 'Auto ' + ocrAttemptCount + '/' + maxAutoAttempts + ' | Conf: ' + Math.round(confidence) + '%';
+
+      var date = extractDateFromText(text);
+
+      if (date) {
+        stopExpiryScan();
+        closeExpiryCamera();
+        hideScanButtonSpinner();
+        detectedExpiryDate = date;
+        detectedExpiryConfidence = confidence || 70;
+        showExpiryConfirmModal(expiryPhotoData, date, detectedExpiryConfidence);
+        showToast('&#9989; Data rilevata automaticamente!');
+        return;
+      }
+
+      if (ocrAttemptCount >= maxAutoAttempts) {
+        stopExpiryScan();
+        hideScanButtonSpinner();
+        showToast('&#128248; Scansione auto terminata, scatta la foto manualmente');
+        switchToManualCapture();
+      }
+    })
+    .catch(function(err) {
+      console.error('Errore OCR auto:', err);
+      if (ocrAttemptCount >= maxAutoAttempts) {
+        stopExpiryScan();
+        hideScanButtonSpinner();
+        switchToManualCapture();
+      }
+    });
+}
+
+/**
+ * FASE 2: Passa alla cattura manuale (foto singola)
+ */
+function switchToManualCapture() {
+  var statusDiv = document.getElementById('expiry-camera-status');
+  if (statusDiv) statusDiv.textContent = 'Scatta la foto alla data';
+  showToast('&#128247; Inquadra la data e scatta la foto');
+}
+
+/**
+ * Scatta la foto e analizza la data (metodo manuale)
+ */
+function captureExpiryPhoto() {
+  var video = document.getElementById('expiry-camera-video');
+  if (!video || !video.videoWidth) {
+    showToast('&#10060; Fotocamera non pronta');
+    return;
+  }
+
+  document.getElementById('expiry-ocr-loading').classList.add('active');
+  showScanButtonSpinner();
+
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  expiryPhotoData = canvas.toDataURL('image/jpeg', 0.9);
+
+  var cropCanvas = document.createElement('canvas');
+  var cropCtx = cropCanvas.getContext('2d');
+  var cropX = canvas.width * 0.05;
+  var cropY = canvas.height * 0.25;
+  var cropW = canvas.width * 0.9;
+  var cropH = canvas.height * 0.5;
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  var processedCanvas = preprocessForOCR(cropCanvas);
+
+  var finalCanvas = document.createElement('canvas');
+  var finalCtx = finalCanvas.getContext('2d');
+  var scale = 2;
+  finalCanvas.width = processedCanvas.width * scale;
+  finalCanvas.height = processedCanvas.height * scale;
+  finalCtx.imageSmoothingEnabled = false;
+  finalCtx.drawImage(processedCanvas, 0, 0, finalCanvas.width, finalCanvas.height);
+
+  var ocrImageData = finalCanvas.toDataURL('image/jpeg', 0.95);
+
+  closeExpiryCamera();
+  analyzeExpiryImageManual(ocrImageData);
+}
+
+/**
+ * Analizza l'immagine in modalita manuale
+ */
+function analyzeExpiryImageManual(ocrImageData) {
+  showScanButtonSpinner();
+  showToast('&#128247; Analizzo la foto...');
+
+  if (!expiryOCRWorker) {
+    initExpiryOCR()
+      .then(function() {
+        return runOCRAnalysis(ocrImageData);
+      })
+      .catch(function(err) {
+        hideScanButtonSpinner();
+        showToast('&#10060; OCR non disponibile: ' + (err.message || 'errore'));
+      });
+  } else {
+    runOCRAnalysis(ocrImageData);
+  }
+}
+
+/**
+ * Esegue l'analisi OCR vera e propria
+ */
+function runOCRAnalysis(ocrImageData) {
+  expiryOCRWorker.recognize(ocrImageData, {}, { text: true })
+    .then(function(result) {
+      hideScanButtonSpinner();
+      var text = (result.data && result.data.text) ? result.data.text.trim() : '';
+      var confidence = (result.data && result.data.confidence) ? result.data.confidence : 0;
+
+      console.log('Manual OCR result:', text, 'conf:', confidence);
+
+      var date = extractDateFromText(text);
+
+      if (date) {
+        detectedExpiryDate = date;
+        detectedExpiryConfidence = confidence || 70;
+        showExpiryConfirmModal(expiryPhotoData, date, detectedExpiryConfidence);
+        showToast('&#9989; Data rilevata!');
+      } else {
+        showToast('&#128533; Data non rilevata, inseriscila manualmente');
+      }
+    })
+    .catch(function(err) {
+      hideScanButtonSpinner();
+      console.error('Errore OCR manuale:', err);
+      showToast('&#10060; Errore OCR: ' + (err.message || 'riprova'));
+    });
+}
+
+/**
+ * Ferma la scansione automatica
+ */
+function stopExpiryScan() {
+  isExpiryScanning = false;
+  if (expiryScanInterval) {
+    clearInterval(expiryScanInterval);
+    expiryScanInterval = null;
+  }
+}
+
+/**
+ * Chiude la fotocamera data
+ */
+function closeExpiryCamera() {
+  stopExpiryScan();
+  hideScanButtonSpinner();
+
+  var overlay = document.getElementById('expiry-camera-overlay');
+  var video = document.getElementById('expiry-camera-video');
+
+  overlay.classList.remove('active');
+
+  if (expiryCameraStream) {
+    expiryCameraStream.getTracks().forEach(function(track) { track.stop(); });
+    expiryCameraStream = null;
+  }
+
+  video.srcObject = null;
+  video.style.display = 'none';
+
+  document.getElementById('expiry-ocr-loading').classList.remove('active');
+  isOCRLoading = false;
+}
+
+/**
+ * Estrae data dal testo OCR
+ */
+function extractDateFromText(text) {
+  if (!text) return null;
+
+  var clean = text.replace(/\s+/g, ' ').trim();
+
+  var patterns = [
+    { regex: /(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})/, format: 'DMY' },
+    { regex: /(\d{4})[\/\.\-](\d{1,2})[\/\.\-](\d{1,2})/, format: 'YMD' },
+    { regex: /(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2})/, format: 'DMY_SHORT' },
+    { regex: /(\d{1,2})\s+(GEN|FEB|MAR|APR|MAG|GIU|LUG|AGO|SET|OTT|NOV|DIC)[A-Z]*\s+(\d{4})/i, format: 'DMY_WORD' },
+    { regex: /(?:EXP|SCAD|SCADENZA|BB|BEST BEFORE|USE BY)[^\d]*(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4}|\d{2})/i, format: 'DMY' },
+    { regex: /[^\d](20\d{2})(\d{2})(\d{2})[^\d]/, format: 'YMD_COMPACT' }
+  ];
+
+  var monthNames = {
+    'gen': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'mag': 5, 'giu': 6,
+    'lug': 7, 'ago': 8, 'set': 9, 'ott': 10, 'nov': 11, 'dic': 12
+  };
+
+  for (var i = 0; i < patterns.length; i++) {
+    var match = clean.match(patterns[i].regex);
+    if (match) {
+      var d, m, y;
+
+      if (patterns[i].format === 'DMY' || patterns[i].format === 'DMY_SHORT') {
+        d = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        y = parseInt(match[3], 10);
+        if (patterns[i].format === 'DMY_SHORT') y += 2000;
+      } else if (patterns[i].format === 'YMD') {
+        y = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        d = parseInt(match[3], 10);
+      } else if (patterns[i].format === 'YMD_COMPACT') {
+        y = parseInt(match[1], 10);
+        m = parseInt(match[2], 10);
+        d = parseInt(match[3], 10);
+      } else if (patterns[i].format === 'DMY_WORD') {
+        d = parseInt(match[1], 10);
+        var monthStr = match[2].toLowerCase().substring(0, 3);
+        m = monthNames[monthStr] || 0;
+        y = parseInt(match[3], 10);
+      }
+
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 2020 && y <= 2040) {
+        var yy = String(y);
+        var mm = String(m).padStart(2, '0');
+        var dd = String(d).padStart(2, '0');
+        return yy + '-' + mm + '-' + dd;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Mostra modal conferma data rilevata
+ */
+function showExpiryConfirmModal(previewUrl, dateStr, confidence) {
+  var previewDiv = document.getElementById('expiry-preview-img');
+  var valueDiv = document.getElementById('expiry-detected-value');
+  var confDiv = document.getElementById('expiry-detected-confidence');
+
+  previewDiv.innerHTML = '<img src="' + previewUrl + '" alt="Frame data scadenza">';
+
+  var parts = dateStr.split('-');
+  var displayDate = parts[2] + '/' + parts[1] + '/' + parts[0];
+  valueDiv.textContent = displayDate;
+  valueDiv.style.color = 'var(--primary)';
+  confDiv.textContent = 'Confidenza: ' + Math.round(confidence) + '%';
+  confDiv.style.display = 'block';
+
+  document.getElementById('expiry-confirm-modal').classList.add('show');
+}
+
+/**
+ * Chiude modal conferma data
+ */
+function closeExpiryConfirmModal(e) {
+  if (e.target === e.currentTarget) {
+    document.getElementById('expiry-confirm-modal').classList.remove('show');
+    detectedExpiryDate = null;
+    detectedExpiryConfidence = 0;
+    expiryPhotoData = null;
+  }
+}
+
+/**
+ * Accetta data rilevata
+ */
+function acceptDetectedExpiry() {
+  if (detectedExpiryDate) {
+    document.getElementById('expiry-input').value = detectedExpiryDate;
+    showToast('&#9989; Data scadenza inserita: ' + formatDate(detectedExpiryDate));
+  }
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+}
+
+/**
+ * Modifica data rilevata
+ */
+function editDetectedExpiry() {
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+
+  if (detectedExpiryDate) {
+    document.getElementById('expiry-input').value = detectedExpiryDate;
+  }
+
+  setTimeout(function() {
+    document.getElementById('expiry-input').focus();
+    showToast('&#9998; Modifica la data e premi Aggiungi');
+  }, 300);
+
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+}
+
+/**
+ * Ignora data rilevata
+ */
+function rejectDetectedExpiry() {
+  document.getElementById('expiry-confirm-modal').classList.remove('show');
+  detectedExpiryDate = null;
+  detectedExpiryConfidence = 0;
+  expiryPhotoData = null;
+  showToast('&#10060; Data ignorata, inseriscila manualmente');
+}
+
+/**
+ * Termina worker Tesseract
+ */
+function terminateExpiryOCR() {
+  if (expiryOCRWorker) {
+    expiryOCRWorker.terminate();
+    expiryOCRWorker = null;
+  }
+}
+// ============================================================
+// INIZIALIZZAZIONE
+// ============================================================
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
