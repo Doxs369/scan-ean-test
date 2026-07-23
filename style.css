@@ -746,7 +746,7 @@ body {
 /* Add item bar */
 .add-item-bar {
   position: fixed;
-  bottom: 36px;
+  bottom: 44px;
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 40px);
@@ -788,7 +788,7 @@ body {
 /* ===== BOTTOM NAV ===== */
 .bottom-nav {
   position: fixed;
-  bottom: -20px;
+  bottom: -12px;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
@@ -807,7 +807,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 4px 14px;
+  padding: 2px 14px 6px;
   cursor: pointer;
   color: var(--text-muted);
   transition: color 0.2s;
@@ -1424,6 +1424,7 @@ body {
   font-size: 36px;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
   animation: scanBounce 2s ease-in-out infinite;
+  margin-top: -8px;
 }
 
 @keyframes scanBounce {
@@ -1437,6 +1438,7 @@ body {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
   transition: transform 0.2s;
   line-height: 1;
+  margin-top: -8px;
 }
 
 #nav-pantry-icon {
