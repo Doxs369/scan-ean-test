@@ -797,7 +797,7 @@ body {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   display: flex;
   justify-content: space-around;
-  padding: 8px 0 24px;
+  padding: 8px 0 48px;
   box-shadow: 0 -4px 24px rgba(0,0,0,0.06);
   z-index: 100;
   border-top: 1px solid rgba(59,176,149,0.06);
@@ -824,7 +824,7 @@ body {
 }
 .nav-scan {
   position: relative;
-  top: -20px;
+  top: -12px;
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -1418,3 +1418,47 @@ body {
 .btn-loading:active {
   transform: none !important;
 }
+
+/* ===== SCAN ICON 3D ANIMATION ===== */
+#nav-scan-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  animation: scanBounce 2s ease-in-out infinite;
+}
+
+@keyframes scanBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* ===== NAV EMOJI ICONS 3D ANIMATION ===== */
+.nav-emoji {
+  font-size: 24px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  transition: transform 0.2s;
+  line-height: 1;
+}
+
+#nav-pantry-icon {
+  animation: pantryBounce 2.5s ease-in-out infinite;
+}
+
+#nav-list-icon {
+  animation: listBounce 3s ease-in-out infinite;
+}
+
+.nav-item.active .nav-emoji {
+  filter: drop-shadow(0 2px 4px rgba(59,176,149,0.3));
+}
+
+@keyframes pantryBounce {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.12) rotate(-3deg); }
+  75% { transform: scale(1.12) rotate(3deg); }
+}
+
+@keyframes listBounce {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.12) translateY(-2px); }
+}
+
