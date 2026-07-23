@@ -655,6 +655,8 @@
       </div>
     </div>
 
+    <button class="btn btn-clear-list" onclick="clearShoppingList()">&#128465; Svuota lista</button>
+
     <div id="shopping-list"></div>
   </div>
 
@@ -797,6 +799,21 @@
         <button class="btn btn-primary" id="confirm-btn-primary">&#9989; Aggiungi alla lista spesa</button>
         <button class="btn btn-danger" id="confirm-btn-danger">&#128465; Rimuovi definitivamente</button>
         <button class="btn btn-secondary" id="confirm-btn-cancel">&#10060; Annulla</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL COMPLETAMENTO SPESA -->
+  <div class="modal-overlay" id="shopping-complete-modal">
+    <div class="modal-content" style="max-width:340px;border-radius:24px;padding:28px;text-align:center;">
+      <div class="modal-handle"></div>
+      <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary-light),var(--primary));display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">&#127881;</div>
+      <div class="modal-title" style="font-size:20px;">Spesa completata!</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.5;" id="shopping-complete-desc">Hai acquistato 0 prodotti</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
+        <button class="btn btn-primary" onclick="confirmClearShoppingList()">&#128465; Elimina lista</button>
+        <button class="btn btn-secondary" onclick="closeShoppingCompleteModal(); navigateTo('pantry');">&#127968; Torna alla dispensa</button>
       </div>
     </div>
   </div>
