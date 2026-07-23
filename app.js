@@ -1634,6 +1634,7 @@ function scanExpiryDate() {
 
   btn.disabled = true;
   setExpiryButtonLoading(true);
+  document.getElementById('expiry-spinner').classList.remove('hidden');
   statusDiv.style.display = 'block';
 
   showToast('&#128247; Avvio scansione automatica...');
@@ -1746,6 +1747,7 @@ function doAutoCaptureAttempt() {
       closeExpiryCamera();
       showExpiryConfirmModal(expiryPhotoData, date, detectedExpiryConfidence);
       setExpiryButtonLoading(false);
+      document.getElementById('expiry-spinner').classList.add('hidden');
       showToast('&#9989; Data trovata al tentativo ' + autoCaptureCount + '!');
     }
   });
@@ -1937,6 +1939,10 @@ function closeExpiryCamera() {
   if (btn && btn.disabled) {
     setExpiryButtonLoading(false);
   }
+
+  // Nascondi spinner sicurezza
+  var spinner = document.getElementById('expiry-spinner');
+  if (spinner) spinner.classList.add('hidden');
 }
 
 /**
@@ -1966,15 +1972,18 @@ function analyzeExpiryImage(ocrImageData) {
         detectedExpiryConfidence = confidence || 70;
         showExpiryConfirmModal(expiryPhotoData, date, detectedExpiryConfidence);
         setExpiryButtonLoading(false);
+        document.getElementById('expiry-spinner').classList.add('hidden');
         showToast('&#9989; Data rilevata!');
       } else {
         setExpiryButtonLoading(false);
+        document.getElementById('expiry-spinner').classList.add('hidden');
         showToast('&#128533; Data non rilevata, inseriscila manualmente');
       }
     })
     .catch(function(err) {
       console.error('Errore OCR:', err);
       setExpiryButtonLoading(false);
+      document.getElementById('expiry-spinner').classList.add('hidden');
       showToast('&#10060; Errore OCR: ' + (err.message || 'riprova'));
     });
 }
@@ -2083,6 +2092,7 @@ function acceptDetectedExpiry() {
     showToast('&#9989; Data scadenza inserita: ' + formatDate(detectedExpiryDate));
   }
   document.getElementById('expiry-confirm-modal').classList.remove('show');
+  document.getElementById('expiry-spinner').classList.add('hidden');
   detectedExpiryDate = null;
   detectedExpiryConfidence = 0;
   expiryPhotoData = null;
@@ -2103,6 +2113,7 @@ function editDetectedExpiry() {
     showToast('&#9998; Modifica la data e premi Aggiungi');
   }, 300);
 
+  document.getElementById('expiry-spinner').classList.add('hidden');
   detectedExpiryDate = null;
   detectedExpiryConfidence = 0;
   expiryPhotoData = null;
@@ -2117,6 +2128,7 @@ function rejectDetectedExpiry() {
   detectedExpiryConfidence = 0;
   expiryPhotoData = null;
   setExpiryButtonLoading(false);
+  document.getElementById('expiry-spinner').classList.add('hidden');
   showToast('&#10060; Data ignorata, inseriscila manualmente');
 }
 
