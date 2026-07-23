@@ -71,7 +71,7 @@ function init() {
   setTimeout(function() {
     var splash = document.getElementById('splash');
     if (splash) splash.classList.add('hidden');
-  }, 1800);
+  }, 1200);
 }
 
 function getMaxId(arr) {
@@ -1438,11 +1438,20 @@ function formatDate(dateStr) {
 
 function showToast(msg) {
   var toast = document.getElementById('toast');
-  toast.innerHTML = msg;
+  // Se il messaggio inizia con un'emoji HTML entity o carattere emoji Unicode, wrappala
+  var processedMsg = msg;
+  // Pattern per catturare emoji all'inizio: &#XXXX; o &#X; o caratteri emoji Unicode
+  var emojiMatch = msg.match(/^(\s*(&#\d+;|&#x[0-9a-fA-F]+;|[\uD83C-\uDBFF\uDC00-\uDFFF]|[\u2600-\u26FF]|[\u2700-\u27BF]|[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}])\s*)/u);
+  if (emojiMatch) {
+    var emoji = emojiMatch[1];
+    var rest = msg.substring(emojiMatch[0].length);
+    processedMsg = '<span class="toast-emoji">' + emoji + '</span>' + rest;
+  }
+  toast.innerHTML = processedMsg;
   toast.classList.add('show');
   setTimeout(function() {
     toast.classList.remove('show');
-  }, 2500);
+  }, 4000);
 }
 
 function toggleTorch() {
@@ -1945,7 +1954,7 @@ function closeExpiryCamera() {
  * Analizza un'immagine con OCR (usata dal flusso manuale)
  */
 function analyzeExpiryImage(ocrImageData) {
-  showToast('&#128247; Analizzo la data...');
+  showToast('&#128247; Analizzo la foto per rilevare la data di scadenza...');
 
   initExpiryOCR()
     .then(function() {
@@ -1967,7 +1976,7 @@ function analyzeExpiryImage(ocrImageData) {
         showToast('&#9989; Data rilevata!');
       } else {
         setExpiryButtonLoading(false);
-        showToast('&#128533; Data non rilevata, inseriscila manualmente');
+        showToast('&#9888;&#65039; Data non rilevata. Inseriscila manualmente.');
       }
     })
     .catch(function(err) {
