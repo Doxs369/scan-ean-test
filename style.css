@@ -1573,7 +1573,7 @@ body {
 }
 .list-product-name {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
