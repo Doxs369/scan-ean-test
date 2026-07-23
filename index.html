@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#32aa8c">
+<meta name="description" content="ScanEan - Gestione intelligente della dispensa con scanner barcode">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ScanEan">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="ScanEan">
+<meta name="msapplication-TileColor" content="#32aa8c">
+<meta name="msapplication-TileImage" content="./icons/icon-144x144.png">
+
+<!-- Manifest PWA -->
+<link rel="manifest" href="./manifest.json">
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
+<link rel="shortcut icon" href="./favicon.ico">
+
+<!-- Apple Touch Icons -->
+<link rel="apple-touch-icon" sizes="72x72" href="./icons/icon-72x72.png">
+<link rel="apple-touch-icon" sizes="96x96" href="./icons/icon-96x96.png">
+<link rel="apple-touch-icon" sizes="128x128" href="./icons/icon-128x128.png">
+<link rel="apple-touch-icon" sizes="144x144" href="./icons/icon-144x144.png">
+<link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152x152.png">
+<link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192x192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="./icons/icon-512x512.png">
+
+<!-- Splash Screen iOS -->
+<link rel="apple-touch-startup-image" href="./icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
+
+<title>ScanEan - Gestione Dispensa</title>
+<link rel="stylesheet" href="./style.css?v=2">
+<style>
+/* Stili aggiuntivi per ricette TheMealDB */
+.recipe-img-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+}
+.recipe-img-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.recipe-card .recipe-header {
+  align-items: center;
+}
+
+/* Stats card cliccabili */
+.stat-card {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.stat-card:active {
+  transform: scale(0.96);
+}
+
+/* Modal ordinamento */
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+.sort-option:active {
+  transform: scale(0.98);
+}
+.sort-option.active {
+  border-color: var(--primary);
+  background: rgba(59,176,149,0.08);
+}
+.sort-option-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.sort-option-text {
+  flex: 1;
+}
+.sort-option-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.sort-option-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.sort-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+}
+.sort-check.hidden {
+  display: none;
+}
+
+/* Modal INFO prodotto */
+.info-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(59,176,149,0.08);
+}
+.info-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.info-section-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.nutri-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.nutri-item {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.nutri-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.nutri-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-top: 2px;
+}
+
+/* Info modal immagine */
+.info-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin: 0 auto 16px;
+  overflow: hidden;
+}
+.info-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ===== MODAL CONFERMA DATA SCADENZA ===== */
+.expiry-confirm-img {
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-confirm-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.expiry-detected-date {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 4px;
+  text-align: center;
+}
+.expiry-detected-conf {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* ===== CAMERA OVERLAY PER DATA ===== */
+.expiry-camera-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+}
+.expiry-camera-overlay.active {
+  display: flex;
+}
+.expiry-camera-video {
+  flex: 1;
+  width: 100%;
+  object-fit: cover;
+}
+.expiry-camera-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 120px;
+  border: 3px dashed var(--accent);
+  border-radius: 12px;
+  background: rgba(231, 141, 110, 0.1);
+  pointer-events: none;
+  animation: expiryPulse 1.5s ease-in-out infinite;
+}
+@keyframes expiryPulse {
+  0%, 100% { border-color: var(--accent); opacity: 0.6; }
+  50% { border-color: var(--primary); opacity: 1; }
+}
+.expiry-camera-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -100px);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.expiry-camera-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 80px);
+  color: var(--primary-light);
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  text-align: center;
+  pointer-events: none;
+  z-index: 5;
+  background: rgba(0,0,0,0.5);
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+.expiry-camera-actions {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  z-index: 10;
+  padding: 0 20px;
+}
+.expiry-camera-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 4px solid white;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-camera-btn-inner {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: white;
+}
+.expiry-camera-close {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.expiry-ocr-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  padding: 24px 32px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  z-index: 20;
+  display: none;
+}
+.expiry-ocr-loading.active {
+  display: block;
+}
+.expiry-ocr-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+.expiry-ocr-loading-text {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ===== PWA INSTALL BANNER ===== */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  width: calc(100% - 32px);
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(59,176,149,0.1);
+}
+.pwa-install-banner.show {
+  transform: translateX(-50%) translateY(0);
+}
+.pwa-install-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.pwa-install-text {
+  flex: 1;
+}
+.pwa-install-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.pwa-install-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.pwa-install-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.pwa-install-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Extra padding per schermata lista spesa */
+#screen-list {
+  padding-bottom: 40px;
+}</style>
+
+  <!-- Cache busting -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+</head>
+<body>
+
+<div class="app-frame">
+
+  <!-- SPLASH SCREEN -->
+  <div class="splash" id="splash">
+    <svg class="splash-logo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <!-- Sfondo cerchio sottile -->
+      <circle cx="50" cy="50" r="46" fill="white" opacity="0.12"/>
+
+      <!-- Cornice scanner stilizzata -->
+      <rect x="18" y="18" width="64" height="64" rx="14" fill="none" stroke="white" stroke-width="2.5" opacity="0.9"/>
+
+      <!-- Angoli scanner in accento -->
+      <path d="M18 32 L18 18 L32 18" fill="none" stroke="#E78D6E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M68 18 L82 18 L82 32" fill="none" stroke="#E78D6E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M82 68 L82 82 L68 82" fill="none" stroke="#E78D6E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 82 L18 82 L18 68" fill="none" stroke="#E78D6E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Scaffali dispensa -->
+      <rect x="28" y="38" width="44" height="4" rx="2" fill="white" opacity="0.9"/>
+      <rect x="28" y="56" width="44" height="4" rx="2" fill="white" opacity="0.9"/>
+
+      <!-- Barre barcode sullo scaffale superiore -->
+      <rect x="32" y="30" width="3" height="8" rx="1.5" fill="white" opacity="0.7"/>
+      <rect x="37" y="28" width="2.5" height="10" rx="1.2" fill="white" opacity="0.7"/>
+      <rect x="41" y="30" width="4" height="8" rx="2" fill="white" opacity="0.7"/>
+      <rect x="47" y="29" width="2" height="9" rx="1" fill="#E78D6E" opacity="0.9"/>
+      <rect x="51" y="30" width="3" height="8" rx="1.5" fill="white" opacity="0.7"/>
+      <rect x="56" y="28" width="2.5" height="10" rx="1.2" fill="white" opacity="0.7"/>
+      <rect x="60" y="30" width="4" height="8" rx="2" fill="white" opacity="0.7"/>
+
+      <!-- Prodotti sullo scaffale inferiore -->
+      <!-- Scatola / pacco -->
+      <rect x="34" y="46" width="10" height="10" rx="2" fill="white" opacity="0.85"/>
+      <rect x="36" y="48" width="6" height="1.5" rx="0.7" fill="#3BB095" opacity="0.6"/>
+      <rect x="36" y="50.5" width="4" height="1" rx="0.5" fill="#3BB095" opacity="0.4"/>
+
+      <!-- Barattolo / lattina -->
+      <rect x="48" y="44" width="8" height="12" rx="3" fill="white" opacity="0.85"/>
+      <rect x="50" y="46" width="4" height="1.5" rx="0.7" fill="#E78D6E" opacity="0.7"/>
+
+      <!-- Bottiglia -->
+      <rect x="60" y="45" width="6" height="11" rx="3" fill="white" opacity="0.85"/>
+      <rect x="61.5" y="42" width="3" height="4" rx="1.5" fill="white" opacity="0.85"/>
+      <rect x="62" y="47" width="2" height="1" rx="0.5" fill="#E78D6E" opacity="0.5"/>
+
+      <!-- Foglia freschezza (accento) -->
+      <path d="M72 28 Q78 22 82 28 Q78 34 72 28Z" fill="#E78D6E" opacity="0.9"/>
+      <path d="M77 28 Q80 25 82 28" fill="none" stroke="white" stroke-width="0.8" opacity="0.6"/>
+
+      <!-- Calendario data scadenza -->
+      <rect x="22" y="64" width="10" height="10" rx="2" fill="white" opacity="0.9"/>
+      <rect x="22" y="64" width="10" height="3" rx="2" fill="#E78D6E" opacity="0.9"/>
+      <text x="27" y="71.5" text-anchor="middle" font-size="5" font-weight="800" fill="#2A8A72">31</text>
+    </svg>
+    <div class="splash-logo">Scan<span>Ean</span></div>
+    <div class="splash-sub">Gestione dispensa intelligente</div>
+  </div>
+
+  <!-- SCREEN: PANTRY -->
+  <div class="screen active" id="screen-pantry">
+    <div class="header">
+      <div class="header-top">
+        <div class="logo-text">Scan<span>Ean</span></div>
+        <div class="header-avatar">&#128100;</div>
+      </div>
+      <div class="search-bar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" placeholder="Cerca nella dispensa..." id="searchInput" autocomplete="off">
+      </div>
+    </div>
+
+    <!-- STATS ROW — CLICCABILI -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number" id="stat-total">0</div>
+        <div class="stat-label">Prodotti</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-number" id="stat-warning">0</div>
+        <div class="stat-label">In scadenza</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-number" id="stat-expired">0</div>
+        <div class="stat-label">Scaduti</div>
+      </div>
+    </div>
+
+    <!-- HEADER SEZIONE -->
+    <div class="section-header">
+      <div class="section-title">La tua dispensa</div>
+      <a class="section-link" onclick="openSortModal()">&#8693; Ordina</a>
+    </div>
+
+    <!-- FILTER CHIPS -->
+    <div class="filter-chips" id="filter-chips">
+      <div class="chip active" data-cat="all" onclick="filterProducts('all', this)">Tutti</div>
+      <div class="chip" data-cat="dairy" onclick="filterProducts('dairy', this)">&#129371; Latticini</div>
+      <div class="chip" data-cat="meat" onclick="filterProducts('meat', this)">&#129385; Carne</div>
+      <div class="chip" data-cat="produce" onclick="filterProducts('produce', this)">&#129388; Verdura</div>
+      <div class="chip" data-cat="pantry" onclick="filterProducts('pantry', this)">&#129387; Dispensa</div>
+      <div class="chip" data-cat="expiring" onclick="filterProducts('expiring', this)">&#9200; In scadenza</div>
+    </div>
+
+    <div id="products-list"></div>
+
+    <!-- RICETTE DEL GIORNO -->
+    <div class="section-header" style="margin-top: 24px;">
+      <div class="section-title">&#127860; Ricette per oggi</div>
+      <a class="section-link" onclick="loadDailyRecipesFromAPI()">&#128260; Aggiorna</a>
+    </div>
+
+    <div id="daily-recipes-container"></div>
+  </div>
+
+  <!-- SCREEN: SCANNER -->
+  <div class="screen" id="screen-scanner">
+    <div class="scanner-container">
+      <div class="scanner-overlay"></div>
+
+      <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+      <canvas id="camera-canvas" style="display:none;"></canvas>
+
+      <div class="scanner-frame" id="scanner-frame">
+        <div class="scanner-line"></div>
+      </div>
+      <div class="scanner-hint" id="scanner-hint">
+        Inquadra il codice a barre<br>Lo scanner lo rilevera automaticamente
+      </div>
+      <div class="scanner-actions" id="scanner-actions">
+        <button class="scan-icon-btn" onclick="toggleTorch()" title="Torcia">&#128294;</button>
+        <button class="scan-btn" onclick="captureBarcode()" title="Scansiona"><div class="scan-btn-inner"></div></button>
+        <button class="scan-icon-btn" onclick="stopScanner(); navigateTo('pantry');" title="Chiudi">&#10005;</button>
+      </div>
+
+      <div class="api-loading" id="api-loading" style="display:none;">
+        <div class="spinner"></div>
+        <div class="api-loading-text">Ricerca prodotto...</div>
+      </div>
+
+      <div class="scan-result" id="scan-result">
+        <div class="scan-result-header">
+          <div class="scan-result-img" id="result-img">
+            <span class="placeholder-text">&#129371;</span>
+          </div>
+          <div>
+            <div class="scan-result-title" id="result-title">Prodotto</div>
+            <div class="scan-result-sub" id="result-sub">EAN: ---</div>
+          </div>
+        </div>
+
+        <img class="camera-preview" id="camera-preview" alt="Foto prodotto">
+
+        <div class="form-group">
+          <label class="form-label">Nome prodotto</label>
+          <input type="text" class="form-input" id="product-name-input" placeholder="Inserisci il nome del prodotto...">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data di scadenza</label>
+          <input type="date" class="form-input" id="expiry-input">
+        </div>
+        <button class="btn btn-accent" id="btn-scan-expiry" onclick="scanExpiryDate()" style="margin-bottom:8px;">
+          &#128247; Scansiona data scadenza
+        </button>
+        
+
+        <div class="form-group">
+          <label class="form-label">Quantita</label>
+          <input type="number" class="form-input" id="qty-input" value="1" min="1">
+        </div>
+
+        <button class="btn btn-accent" id="btn-camera" onclick="openCamera()" style="display:none;">
+          &#128247; Scatta foto al prodotto
+        </button>
+
+        <button class="btn btn-primary" onclick="addProduct()">&#10133; Aggiungi alla dispensa</button>
+        <button class="btn btn-secondary" onclick="closeScanResult()">Annulla</button>
+      </div>
+    </div>
+
+    <div class="scanner-top-bar">
+      <button class="scanner-close" onclick="stopScanner(); navigateTo('pantry');">&#10005;</button>
+      <div class="scanner-mode-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        Barcode
+      </div>
+      <button class="scanner-close" onclick="showToast('Impostazioni scanner')">&#9881;</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: SHOPPING LIST -->
+  <div class="screen" id="screen-list">
+    <div class="header">
+      <div class="header-top">
+        <div class="logo-text">Scan<span>Ean</span></div>
+        <div class="header-avatar">&#128100;</div>
+      </div>
+    </div>
+
+    <div class="list-header">
+      <div class="section-title">Lista della spesa</div>
+      <span class="smart-badge">&#129504; Smart</span>
+    </div>
+    <div class="list-desc">Prodotti aggiunti automaticamente quando scadono o vengono consumati.</div>
+
+    <div class="add-item-bar">
+      <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off">
+      <button class="add-item-btn" onclick="addListItem()">+</button>
+    </div>
+
+    <div class="progress-card">
+      <div class="progress-header">
+        <span style="font-size:14px;font-weight:700;color:var(--text-primary);" id="progress-text">0/0 completati</span>
+        <span style="font-size:14px;font-weight:800;color:var(--primary);" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-clear-list" onclick="clearShoppingList()">&#128465; Svuota lista</button>
+
+    <div id="shopping-list"></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <button class="nav-item active" onclick="navigateTo('pantry')" id="nav-pantry">
+      <span id="nav-pantry-icon" class="nav-emoji">🏠</span>
+      <span class="nav-label">Dispensa</span>
+    </button>
+    <button class="nav-scan" onclick="startScanner()" id="nav-scanner-btn">
+      <span id="nav-scan-icon">📸</span>
+    </button>
+    <button class="nav-item" onclick="navigateTo('list')" id="nav-list">
+      <span id="nav-list-icon" class="nav-emoji">📝</span>
+      <span class="nav-label">Lista</span>
+    </button>
+  </div>
+
+  <!-- MODAL PRODOTTO — con tasto INFO -->
+  <div class="modal-overlay" id="product-modal" onclick="closeProductModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-img" id="modal-img">&#129371;</div>
+      <div class="modal-title" id="modal-title">Prodotto</div>
+      <div class="modal-sub" id="modal-sub">EAN: ---</div>
+      <div style="margin-top:16px;" id="modal-badge"></div>
+      <div style="margin-top:20px;" id="modal-details"></div>
+
+      <button class="btn btn-primary" style="margin-top:20px;" onclick="showConsumeConfirm()">&#128722; Consumato</button>
+      <button class="btn btn-secondary" style="margin-top:8px;background:linear-gradient(135deg,#4A90D9,#357ABD);color:white;box-shadow:0 4px 16px rgba(74,144,217,0.3);" onclick="openProductInfo()">&#8505;&#65039; Info prodotto</button>
+      <button class="btn btn-danger" style="margin-top:8px;" onclick="showDeleteConfirm()">&#128465; Rimuovi</button>
+    </div>
+  </div>
+
+  <!-- MODAL INFO PRODOTTO (dettagli API) -->
+  <div class="modal-overlay" id="info-modal" onclick="closeInfoModal(event)">
+    <div class="modal-content recipe-detail-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="info-img" id="info-img">&#129371;</div>
+      <div class="modal-title" id="info-title">Prodotto</div>
+      <div class="modal-sub" id="info-sub">EAN: ---</div>
+      <div style="margin-top:20px;" id="info-body"></div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="closeInfoModalDirect()">Chiudi</button>
+    </div>
+  </div>
+
+  <!-- MODAL ORDINAMENTO -->
+  <div class="modal-overlay" id="sort-modal" onclick="closeSortModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Ordina prodotti</div>
+      <div class="modal-sub">Scegli come ordinare la lista</div>
+
+      <div style="margin-top:20px;">
+        <div class="sort-option active" id="sort-expiry" onclick="setSort('expiry')">
+          <div class="sort-option-icon">&#9200;</div>
+          <div class="sort-option-text">
+            <div class="sort-option-title">Per data di scadenza</div>
+            <div class="sort-option-desc">Prima i prodotti in scadenza, poi quelli con piu tempo</div>
+          </div>
+          <div class="sort-check" id="check-expiry">&#10003;</div>
+        </div>
+
+        <div class="sort-option" id="sort-name" onclick="setSort('name')">
+          <div class="sort-option-icon">&#128218;</div>
+          <div class="sort-option-text">
+            <div class="sort-option-title">Per nome (A-Z)</div>
+            <div class="sort-option-desc">Ordine alfabetico crescente</div>
+          </div>
+          <div class="sort-check hidden" id="check-name">&#10003;</div>
+        </div>
+
+        <div class="sort-option" id="sort-added" onclick="setSort('added')">
+          <div class="sort-option-icon">&#128197;</div>
+          <div class="sort-option-text">
+            <div class="sort-option-title">Per data inserimento</div>
+            <div class="sort-option-desc">Prima gli ultimi aggiunti</div>
+          </div>
+          <div class="sort-check hidden" id="check-added">&#10003;</div>
+        </div>
+
+        <div class="sort-option" id="sort-category" onclick="setSort('category')">
+          <div class="sort-option-icon">&#128451;</div>
+          <div class="sort-option-text">
+            <div class="sort-option-title">Per categoria</div>
+            <div class="sort-option-desc">Raggruppati per tipo di prodotto</div>
+          </div>
+          <div class="sort-check hidden" id="check-category">&#10003;</div>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="closeSortModalDirect()">Chiudi</button>
+    </div>
+  </div>
+
+  <!-- MODAL CONFERMA DATA SCADENZA -->
+  <div class="modal-overlay" id="expiry-confirm-modal" onclick="closeExpiryConfirmModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="modal-title">&#128197; Data rilevata</div>
+      <div class="modal-sub">Ho trovato questa data sull'imballaggio</div>
+      
+      <div style="margin-top:20px; text-align:center;">
+        <div class="expiry-confirm-img" id="expiry-preview-img">
+          <span style="font-size:48px;">&#128247;</span>
+        </div>
+        <div class="expiry-detected-date" id="expiry-detected-value">--/--/----</div>
+        <div class="expiry-detected-conf" id="expiry-detected-confidence">Confidenza: --%</div>
+      </div>
+      
+      <div style="margin-top:20px;">
+        <button class="btn btn-primary" onclick="acceptDetectedExpiry()">&#9989; Accetta e inserisci</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="editDetectedExpiry()">&#9998; Modifica manualmente</button>
+        <button class="btn btn-secondary" style="margin-top:8px;background:rgba(232,93,93,0.1);color:var(--danger);" onclick="rejectDetectedExpiry()">&#10060; Ignora</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DETTAGLIO RICETTA -->
+  <div class="modal-overlay" id="recipe-detail-modal" onclick="closeRecipeDetailModal(event)">
+    <div class="modal-content recipe-detail-content" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="recipe-detail-header">
+        <div class="recipe-detail-title" id="recipe-detail-title">Ricetta</div>
+        <div class="recipe-detail-meta" id="recipe-detail-meta"></div>
+      </div>
+      <div class="recipe-detail-body" id="recipe-detail-body"></div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="closeRecipeDetailModalDirect()">Chiudi</button>
+    </div>
+  </div>
+
+  <!-- MODAL CONFERMA AZIONE (stile app) -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-content" style="max-width:340px;border-radius:24px;padding:28px;text-align:center;">
+      <div class="modal-handle"></div>
+      <div id="confirm-icon" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary-light),var(--primary));display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">&#10067;</div>
+      <div class="modal-title" id="confirm-title" style="font-size:20px;">Prodotto</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.5;" id="confirm-desc">Cosa vuoi fare?</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
+        <button class="btn btn-primary" id="confirm-btn-primary">&#9989; Aggiungi alla lista spesa</button>
+        <button class="btn btn-danger" id="confirm-btn-danger">&#128465; Rimuovi definitivamente</button>
+        <button class="btn btn-secondary" id="confirm-btn-cancel">&#10060; Annulla</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL COMPLETAMENTO SPESA -->
+  <div class="modal-overlay" id="shopping-complete-modal">
+    <div class="modal-content" style="max-width:340px;border-radius:24px;padding:28px;text-align:center;">
+      <div class="modal-handle"></div>
+      <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary-light),var(--primary));display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;">&#127881;</div>
+      <div class="modal-title" style="font-size:20px;">Spesa completata!</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-top:8px;line-height:1.5;" id="shopping-complete-desc">Hai acquistato 0 prodotti</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px;">
+        <button class="btn btn-primary" onclick="confirmClearShoppingList()">&#128465; Elimina lista</button>
+        <button class="btn btn-secondary" onclick="closeShoppingCompleteModal(); navigateTo('pantry');">&#127968; Torna alla dispensa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- OVERLAY CAMERA PER FOTO DATA SCADENZA -->
+  <div class="expiry-camera-overlay" id="expiry-camera-overlay">
+    <video id="expiry-camera-video" class="expiry-camera-video" autoplay playsinline muted></video>
+    <div class="expiry-camera-frame"></div>
+    <div class="expiry-camera-hint">Inquadra la data di scadenza<br>nella zona tratteggiata</div>
+    <div class="expiry-camera-status" id="expiry-camera-status">Scatta la foto alla data</div>
+    <div class="expiry-camera-actions">
+      <button class="expiry-camera-close" onclick="closeExpiryCamera()" title="Annulla">&#10005;</button>
+      <button class="expiry-camera-btn" onclick="captureExpiryPhoto()" title="Scatta foto">
+        <div class="expiry-camera-btn-inner"></div>
+      </button>
+    </div>
+    <div class="expiry-ocr-loading" id="expiry-ocr-loading">
+      <div class="spinner"></div>
+      <div class="expiry-ocr-loading-text">Analizzo la data con OCR...</div>
+    </div>
+  </div>
+
+  <!-- Input file per foto prodotto (da scanner con API) -->
+  <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleCameraPhoto(event)">
+
+  <!-- Input file per foto prodotto manuale (senza API) -->
+  <input type="file" id="camera-input-manual" accept="image/*" capture="environment" onchange="handleManualProductPhoto(event)">
+
+</div>
+
+<!-- MODULI JS -->
+<script src="./storage.js"></script>
+<script src="./openfoodfacts.js"></script>
+<script src="./recipes-api.js"></script>
+<script src="./camera.js"></script>
+<script src="./barcode-scanner.js?v=2"></script>
+<script src="./app.js?v=2"></script>
+
+
+  <!-- PWA Install Banner -->
+  <div class="pwa-install-banner" id="pwa-install-banner">
+    <div class="pwa-install-icon">📦</div>
+    <div class="pwa-install-text">
+      <div class="pwa-install-title">Installa ScanEan</div>
+      <div class="pwa-install-desc">Aggiungi alla schermata home per un accesso rapido</div>
+    </div>
+    <button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
+    <button class="pwa-install-close" id="pwa-install-close">&times;</button>
+  </div>
+
+  <!-- Service Worker Registration + PWA Install Logic -->
+  <script>
+  (function() {
+    'use strict';
+
+    // Registra Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js')
+          .then(function(registration) {
+            console.log('[PWA] SW registrato:', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('[PWA] SW fallito:', error);
+          });
+      });
+    }
+
+    // Gestione installazione PWA
+    var deferredPrompt = null;
+    var installBanner = document.getElementById('pwa-install-banner');
+    var installBtn = document.getElementById('pwa-install-btn');
+    var installClose = document.getElementById('pwa-install-close');
+
+    // Mostra banner se l'app non e installata
+    function isStandalone() {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.navigator.standalone === true;
+    }
+
+    // Nascondi banner se gia installata
+    if (isStandalone()) {
+      if (installBanner) installBanner.style.display = 'none';
+    }
+
+    // Cattura evento beforeinstallprompt
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      console.log('[PWA] beforeinstallprompt catturato');
+
+      // Mostra banner dopo 2 secondi
+      setTimeout(function() {
+        if (installBanner && !isStandalone()) {
+          installBanner.classList.add('show');
+        }
+      }, 2000);
+    });
+
+    // Click su Installa
+    if (installBtn) {
+      installBtn.addEventListener('click', function() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function(choiceResult) {
+            if (choiceResult.outcome === 'accepted') {
+              console.log('[PWA] Utente ha accettato installazione');
+            } else {
+              console.log('[PWA] Utente ha rifiutato installazione');
+            }
+            deferredPrompt = null;
+            if (installBanner) installBanner.classList.remove('show');
+          });
+        }
+      });
+    }
+
+    // Click su Chiudi banner
+    if (installClose) {
+      installClose.addEventListener('click', function() {
+        if (installBanner) {
+          installBanner.classList.remove('show');
+          installBanner.style.display = 'none';
+        }
+        // Salva preferenza
+        try { localStorage.setItem('scanean_install_dismissed', '1'); } catch(e) {}
+      });
+    }
+
+    // Nascondi banner se gia scartato
+    try {
+      if (localStorage.getItem('scanean_install_dismissed') === '1' && installBanner) {
+        installBanner.style.display = 'none';
+      }
+    } catch(e) {}
+
+    // App installata
+    window.addEventListener('appinstalled', function() {
+      console.log('[PWA] App installata!');
+      if (installBanner) {
+        installBanner.classList.remove('show');
+        installBanner.style.display = 'none';
+      }
+      deferredPrompt = null;
+    });
+
+  })();
+  </script>
+</body>
+</html>
