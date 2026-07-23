@@ -21,6 +21,7 @@ var currentImageUrl = null;
 var cameraPhotoData = null;
 var currentRecipeProductId = null;
 var dailyRecipes = null;
+var shoppingCompleteShown = false;
 
 var categoryEmojis = {
   dairy: '&#129371;', meat: '&#129385;', produce: '&#129388;',
@@ -101,7 +102,7 @@ function runDailyCleanup() {
       }
     }
     if (!alreadyInList) {
-      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Scaduto' });
+      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Scaduto', imageUrl: p.imageUrl || null, emoji: p.emoji || '&#128230;' });
     }
     Storage.deleteRecipes(p.id);
   }
@@ -1011,8 +1012,8 @@ function consumeProduct() {
   }
   if (!p) return;
 
-  // Aggiungi alla lista spesa
-  shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Consumato' });
+  // Aggiungi alla lista spesa con imageUrl e emoji
+  shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Consumato', imageUrl: p.imageUrl || null, emoji: p.emoji || '&#128230;' });
   Storage.saveShoppingList(shoppingList);
 
   Storage.deleteRecipes(selectedProductId);
@@ -1183,8 +1184,8 @@ function showDeleteConfirm() {
     '&#128465;',
     '&#9989; Aggiungi alla lista spesa',
     function() {
-      // Aggiungi alla lista spesa con reason diverso
-      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Rimosso dalla dispensa' });
+      // Aggiungi alla lista spesa con reason diverso, imageUrl e emoji
+      shoppingList.push({ id: nextListId++, name: p.name, checked: false, reason: 'Rimosso dalla dispensa', imageUrl: p.imageUrl || null, emoji: p.emoji || '&#128230;' });
       Storage.saveShoppingList(shoppingList);
 
       Storage.deleteRecipes(selectedProductId);
@@ -1353,6 +1354,17 @@ function renderShoppingList() {
   if (progressPct) progressPct.textContent = pct + '%';
   if (progressBar) progressBar.style.width = pct + '%';
 
+  // Mostra modal completamento quando progresso = 100% (solo una volta per sessione)
+  if (total > 0 && pct === 100 && !shoppingCompleteShown) {
+    shoppingCompleteShown = true;
+    showShoppingCompleteModal(checked);
+  }
+
+  // Resetta il flag se la lista viene svuotata o ci sono item non completati
+  if (total > 0 && pct < 100) {
+    shoppingCompleteShown = false;
+  }
+
   if (total === 0) {
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128722;</div><div class="empty-state-title">Lista vuota</div><div class="empty-state-desc">I prodotti consumati o scaduti appariranno qui automaticamente.</div></div>';
     return;
@@ -1362,12 +1374,18 @@ function renderShoppingList() {
   for (var idx = 0; idx < shoppingList.length; idx++) {
     var item = shoppingList[idx];
     var reasonEmoji = item.reason === 'Scaduto' ? '&#9940;' : (item.reason === 'Consumato' ? '&#9989;' : '&#129302;');
-    html += '<div class="list-item" style="animation-delay:' + (idx * 0.03) + 's">' +
-      '<div class="checkbox ' + (item.checked ? 'checked' : '') + '" onclick="toggleCheck(' + item.id + ')"></div>' +
-      '<div style="flex:1">' +
-        '<div class="list-item-text ' + (item.checked ? 'checked' : '') + '">' + item.name + '</div>' +
-        '<div class="list-item-reason">' + reasonEmoji + ' ' + item.reason + '</div>' +
+    var defaultEmoji = item.emoji || '&#128722;';
+    var imgHtml = item.imageUrl ? '<img src="' + item.imageUrl + '" alt="' + item.name + '" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'' + defaultEmoji + '\'">' : defaultEmoji;
+    var checkedClass = item.checked ? 'checked' : '';
+
+    html += '<div class="list-product-card ' + checkedClass + '" style="animation-delay:' + (idx * 0.03) + 's" onclick="toggleCheck(' + item.id + ')">' +
+      '<div class="list-product-img">' + imgHtml + '</div>' +
+      '<div class="list-product-info">' +
+        '<div class="list-product-name">' + item.name + '</div>' +
+        '<div class="list-product-reason">' + reasonEmoji + ' ' + item.reason + '</div>' +
       '</div>' +
+      '<div class="list-product-checkbox ' + checkedClass + '"></div>' +
+      '<button class="list-product-delete" onclick="event.stopPropagation(); deleteListItem(' + item.id + ')" title="Elimina">&#128465;</button>' +
     '</div>';
   }
   list.innerHTML = html;
@@ -1388,11 +1406,96 @@ function addListItem() {
   var input = document.getElementById('newItemInput');
   var name = input.value.trim();
   if (!name) return;
-  shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente' });
+  shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente', imageUrl: null, emoji: '&#128722;' });
   input.value = '';
   Storage.saveShoppingList(shoppingList);
   renderShoppingList();
   showToast('&#9989; ' + name + ' aggiunto');
+}
+
+// ============================================================
+// GESTIONE LISTA DELLA SPESA - NUOVE FUNZIONI
+// ============================================================
+
+/**
+ * Elimina un singolo item dalla lista della spesa
+ */
+function deleteListItem(id) {
+  var newList = [];
+  var removedName = '';
+  for (var i = 0; i < shoppingList.length; i++) {
+    if (shoppingList[i].id === id) {
+      removedName = shoppingList[i].name;
+    } else {
+      newList.push(shoppingList[i]);
+    }
+  }
+  shoppingList = newList;
+  Storage.saveShoppingList(shoppingList);
+  renderShoppingList();
+  if (removedName) {
+    showToast('&#128465; "' + removedName + '" rimosso dalla lista');
+  }
+}
+
+/**
+ * Mostra conferma e svuota tutta la lista della spesa
+ */
+function clearShoppingList() {
+  if (shoppingList.length === 0) {
+    showToast('&#128722; La lista è già vuota');
+    return;
+  }
+  showConfirmModal(
+    'Svuota lista',
+    'Sei sicuro di voler eliminare tutti i ' + shoppingList.length + ' prodotti dalla lista?',
+    '&#128465;',
+    '&#9989; Sì, svuota',
+    function() {
+      shoppingList = [];
+      shoppingCompleteShown = false;
+      Storage.saveShoppingList(shoppingList);
+      renderShoppingList();
+      showToast('&#128465; Lista svuotata');
+    },
+    '&#10060; Annulla',
+    function() {}
+  );
+}
+
+/**
+ * Mostra modal di completamento spesa
+ */
+function showShoppingCompleteModal(totalItems) {
+  var modal = document.getElementById('shopping-complete-modal');
+  if (!modal) return;
+
+  var desc = document.getElementById('shopping-complete-desc');
+  if (desc) {
+    desc.textContent = 'Hai acquistato ' + totalItems + ' ' + (totalItems === 1 ? 'prodotto' : 'prodotti') + '!';
+  }
+
+  modal.classList.add('show');
+}
+
+/**
+ * Chiude modal completamento spesa
+ */
+function closeShoppingCompleteModal() {
+  var modal = document.getElementById('shopping-complete-modal');
+  if (modal) modal.classList.remove('show');
+}
+
+/**
+ * Conferma ed elimina lista dalla modal completamento
+ */
+function confirmClearShoppingList() {
+  shoppingList = [];
+  shoppingCompleteShown = false;
+  Storage.saveShoppingList(shoppingList);
+  closeShoppingCompleteModal();
+  renderShoppingList();
+  showToast('&#128465; Lista eliminata');
 }
 
 // ============================================================
