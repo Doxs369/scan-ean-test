@@ -1940,7 +1940,6 @@ function closeExpiryCamera() {
     setExpiryButtonLoading(false);
   }
 
-  // Nascondi spinner sicurezza
   var spinner = document.getElementById('expiry-spinner');
   if (spinner) spinner.classList.add('hidden');
 }
@@ -2124,6 +2123,7 @@ function editDetectedExpiry() {
  */
 function rejectDetectedExpiry() {
   document.getElementById('expiry-confirm-modal').classList.remove('show');
+  document.getElementById('expiry-spinner').classList.add('hidden');
   detectedExpiryDate = null;
   detectedExpiryConfidence = 0;
   expiryPhotoData = null;
