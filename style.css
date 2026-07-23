@@ -45,7 +45,7 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s ease;
-  padding-bottom: 70px;
+  padding-bottom: 50px;
 }
 .screen.active { opacity: 1; pointer-events: auto; }
 .screen::-webkit-scrollbar { display: none; }
@@ -745,14 +745,9 @@ body {
 
 /* Add item bar */
 .add-item-bar {
-  position: fixed;
-  bottom: 44px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 40px);
-  max-width: 380px;
   display: flex;
   gap: 10px;
+  margin: 0 16px 16px;
   z-index: 5;
 }
 .add-item-input {

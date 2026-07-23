@@ -425,7 +425,7 @@
 
 /* Extra padding per schermata lista spesa */
 #screen-list {
-  padding-bottom: 80px;
+  padding-bottom: 40px;
 }</style>
 
   <!-- Cache busting -->
@@ -640,6 +640,11 @@
     </div>
     <div class="list-desc">Prodotti aggiunti automaticamente quando scadono o vengono consumati.</div>
 
+    <div class="add-item-bar">
+      <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off">
+      <button class="add-item-btn" onclick="addListItem()">+</button>
+    </div>
+
     <div class="progress-card">
       <div class="progress-header">
         <span style="font-size:14px;font-weight:700;color:var(--text-primary);" id="progress-text">0/0 completati</span>
@@ -651,11 +656,6 @@
     </div>
 
     <div id="shopping-list"></div>
-
-    <div class="add-item-bar">
-      <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off">
-      <button class="add-item-btn" onclick="addListItem()">+</button>
-    </div>
   </div>
 
   <!-- BOTTOM NAV -->
