@@ -1,4 +1,5 @@
 {
+  "id": "scanean-pwa",
   "name": "ScanEan",
   "short_name": "ScanEan",
   "description": "App per scansionare prodotti e tenere sotto controllo le scadenze",
@@ -58,6 +59,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Schermata principale di ScanEan"
+    },
+    {
+      "src": "screenshots/screenshot-narrow.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "ScanEan su dispositivo mobile"
     }
   ],
   "categories": ["food", "lifestyle", "utilities"],
