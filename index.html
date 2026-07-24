@@ -14,7 +14,7 @@
 <meta name="msapplication-TileImage" content="./icons/icon-144x144.png">
 
 <!-- Manifest PWA -->
-<link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="./manifest.json?v=1.0">
 
 <!-- Favicon -->
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
@@ -34,6 +34,16 @@
 <link rel="apple-touch-startup-image" href="./icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
 
 <title>ScanEan - Gestione Dispensa</title>
+<script src="./version.js?v=1.0"></script>
+<script>
+  // Forza reload quando il Service Worker si aggiorna
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      console.log('[PWA] Nuovo SW attivo, ricarico pagina...');
+      window.location.reload();
+    });
+  }
+</script>
 <link rel="stylesheet" href="./style.css?v=1.2">
 <style>
 /* Stili aggiuntivi per ricette TheMealDB */
@@ -789,9 +799,7 @@
 <script src="./camera.js?v=1.0"></script>
 <script src="./barcode-scanner.js?v=1.0"></script>
 <script src="./app.js?v=1.0"></script>
-<button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
-    <button class="pwa-install-close" id="pwa-install-close">&times;</button>
-  </div>
+
 
   <!-- Service Worker Registration + PWA Install Logic -->
   <script>
