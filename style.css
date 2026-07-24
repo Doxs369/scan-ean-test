@@ -169,8 +169,8 @@ body {
 }
 .filter-chips::-webkit-scrollbar { display: none; }
 .chip {
-  padding: 6px 10px;
-  border-radius: 20px;
+  padding: 5px 8px;
+  border-radius: 18px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -182,16 +182,19 @@ body {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  line-height: 1.2;
+  line-height: 1.1;
   text-align: center;
+  min-width: 56px;
 }
 .chip-emoji {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
 }
 .chip-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .chip.active {
   background: var(--primary);
@@ -396,7 +399,7 @@ body {
 }
 .scanner-hint {
   position: absolute;
-  bottom: 180px;
+  bottom: calc(40px + 72px + 3mm);
   z-index: 3;
   color: white;
   font-size: 14px;
@@ -408,7 +411,7 @@ body {
 }
 .scanner-actions {
   position: absolute;
-  bottom: calc(40px + 5mm);
+  bottom: 40px;
   z-index: 3;
   display: flex;
   gap: 32px;
@@ -642,7 +645,6 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transform: translateY(-5mm);
 }
 .scanner-close {
   width: 40px;
