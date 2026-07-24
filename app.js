@@ -20,8 +20,9 @@ var currentBarcode = null;
 var currentRecipeProductId = null;
 var dailyRecipes = null;
 var shoppingCompleteShown = false;
+var scanTimeout = null;
 
-var categoryEmojis = {
+var categoryEmojis = 
   dairy: '&#129371;', meat: '&#129385;', produce: '&#129388;',
   pantry: '&#129387;', beverages: '&#129380;', frozen: '&#129482;',
   bakery: '&#127838;', sweets: '&#127852;'
@@ -326,6 +327,9 @@ function navigateTo(screen) {
     updateStats();
     renderDailyRecipes();
   }
+  else if (screen === 'settings') {
+    document.getElementById('settings-product-count').textContent = products.length;
+  }
 }
 
 // ============================================================
@@ -338,10 +342,19 @@ function startScanner() {
 
 function startCameraAndScan() {
   isScanning = true;
+  currentBarcode = null;
   document.getElementById('scanner-frame').style.display = 'block';
   document.getElementById('scanner-hint').innerHTML =
     'Inquadra il codice a barre<br>Lo scanner lo rilevera automaticamente';
   document.getElementById('scanner-actions').style.display = 'flex';
+
+  // Timer: se entro 3 secondi non rileva barcode, mostra input nome prodotto
+  scanTimeout = setTimeout(function() {
+    if (!currentBarcode && isScanning) {
+      BarcodeScanner.stop();
+      showManualProductInput();
+    }
+  }, 3000);
 
   Camera.start()
     .then(function(info) {
@@ -352,13 +365,14 @@ function startCameraAndScan() {
     .catch(function(err) {
       console.error('Errore fotocamera:', err);
       showToast('Fotocamera non disponibile: ' + err.message);
-      // Mostra subito input manuale + foto senza dipendere dalla camera
-      showManualBarcodeAndPhotoInput();
+      if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = null; }
+      showManualProductInput();
     });
 }
 
 function stopScanner() {
   isScanning = false;
+  if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = null; }
   BarcodeScanner.stop();
   Camera.stop();
   closeScanResult();
@@ -408,11 +422,105 @@ function processManualBarcode() {
   processBarcode(barcode);
 }
 
+/**
+ * Mostra input manuale per nome prodotto (senza barcode)
+ * Appare automaticamente dopo 3 secondi senza rilevamento
+ */
+function showManualProductInput() {
+  document.getElementById('scanner-frame').style.display = 'none';
+  document.getElementById('scanner-hint').innerHTML =
+    'Inserisci il nome del prodotto<br>o torna indietro per riprovare';
+
+  var manualDiv = document.getElementById('manual-product-input');
+  if (!manualDiv) {
+    manualDiv = document.createElement('div');
+    manualDiv.id = 'manual-product-input';
+    manualDiv.className = 'manual-barcode';
+    manualDiv.style.maxWidth = '320px';
+    manualDiv.innerHTML =
+      '<div style="margin-bottom:12px;">' +
+        '<input type="text" id="manual-product-name" placeholder="Nome prodotto..." style="width:100%;margin-bottom:8px;padding:12px;border-radius:8px;border:none;font-size:16px;" onkeydown="if(event.key==='Enter'){processManualProductName();}">' +
+        '<div id="manual-product-emoji" style="font-size:48px;text-align:center;margin:8px 0;">&#128230;</div>' +
+        '<button onclick="processManualProductName()" style="width:100%;">&#10133; Aggiungi alla dispensa</button>' +
+        '<button onclick="hideManualProductInput()" style="width:100%;background:rgba(255,255,255,0.2);margin-top:8px;">&#10005; Annulla</button>' +
+      '</div>';
+    document.querySelector('.scanner-container').appendChild(manualDiv);
+
+    // Auto-emoji listener
+    var nameInput = document.getElementById('manual-product-name');
+    nameInput.oninput = function() {
+      var emoji = getEmojiForProduct(nameInput.value);
+      document.getElementById('manual-product-emoji').innerHTML = emoji;
+    };
+  }
+  manualDiv.style.display = 'block';
+  document.getElementById('manual-product-name').focus();
+}
+
+function hideManualProductInput() {
+  var manualDiv = document.getElementById('manual-product-input');
+  if (manualDiv) manualDiv.style.display = 'none';
+  stopScanner();
+  navigateTo('pantry');
+}
+
+function processManualProductName() {
+  var nameInput = document.getElementById('manual-product-name');
+  var name = nameInput ? nameInput.value.trim() : '';
+  if (!name) {
+    showToast('Inserisci il nome del prodotto');
+    return;
+  }
+
+  var emoji = getEmojiForProduct(name);
+
+  scannedProductData = {
+    name: name,
+    emoji: emoji,
+    category: 'pantry',
+    brand: '',
+    barcode: null,
+    imageUrl: null
+  };
+  currentBarcode = null;
+
+  // Nascondi input manuale
+  var manualDiv = document.getElementById('manual-product-input');
+  if (manualDiv) manualDiv.style.display = 'none';
+
+  // Mostra scan-result con form
+  var resultImg = document.getElementById('result-img');
+  var resultTitle = document.getElementById('result-title');
+  var resultSub = document.getElementById('result-sub');
+  var formNameInput = document.getElementById('product-name-input');
+  var expiryInput = document.getElementById('expiry-input');
+  var qtyInput = document.getElementById('qty-input');
+
+  resultImg.innerHTML = '<span class="placeholder-text">' + emoji + '</span>';
+  resultTitle.textContent = name;
+  resultSub.innerHTML = 'Prodotto manuale &bull; Inserisci i dati';
+
+  formNameInput.value = name;
+  formNameInput.oninput = function() {
+    var newEmoji = getEmojiForProduct(formNameInput.value);
+    scannedProductData.emoji = newEmoji;
+    resultImg.innerHTML = '<span class="placeholder-text">' + newEmoji + '</span>';
+  };
+
+  var expiry = new Date();
+  expiry.setDate(expiry.getDate() + 30);
+  expiryInput.value = expiry.toISOString().split('T')[0];
+  qtyInput.value = '1';
+
+  document.getElementById('scan-result').classList.add('show');
+}
+
 
 
 
 function onBarcodeDetected(barcode) {
   if (!isScanning) return;
+  if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = null; }
   console.log('Barcode rilevato:', barcode);
   showToast('Barcode rilevato: ' + barcode);
   BarcodeScanner.stop();
@@ -420,6 +528,8 @@ function onBarcodeDetected(barcode) {
 }
 
 function processBarcode(barcode) {
+  if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = null; }
+  currentBarcode = barcode;
   document.getElementById('api-loading').style.display = 'block';
 
   OpenFoodFacts.search(barcode)
@@ -1642,6 +1752,115 @@ function confirmClearShoppingList() {
 }
 
 // ============================================================
+// BACKUP & RIPRISTINO
+// ============================================================
+
+function exportBackup() {
+  var data = Storage.exportData();
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'scanean_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('&#128190; Backup scaricato!');
+}
+
+function importBackup(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (!data.products || !Array.isArray(data.products)) {
+        showToast('&#10060; File non valido');
+        return;
+      }
+      showImportConfirm(data);
+    } catch (err) {
+      showToast('&#10060; Errore lettura file');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+var pendingImportData = null;
+
+function showImportConfirm(data) {
+  pendingImportData = data;
+  var productCount = data.products ? data.products.length : 0;
+  var listCount = data.shoppingList ? data.shoppingList.length : 0;
+  var dateStr = data.exportDate ? data.exportDate.split('T')[0] : 'sconosciuta';
+
+  showConfirmModal(
+    'Ripristina backup',
+    'Trovato backup del ' + dateStr + ':
+' + productCount + ' prodotti, ' + listCount + ' item lista spesa.
+
+I dati attuali verranno sostituiti.',
+    '&#128449;',
+    '&#9989; Sostituisci tutto',
+    function() { confirmImport(); },
+    '&#10060; Annulla',
+    function() { pendingImportData = null; }
+  );
+}
+
+function confirmImport() {
+  if (!pendingImportData) return;
+  Storage.importData(pendingImportData);
+  pendingImportData = null;
+
+  // Ricarica dati in memoria
+  var savedProducts = Storage.loadProducts();
+  var savedList = Storage.loadShoppingList();
+  if (savedProducts && savedProducts.length > 0) {
+    products = savedProducts;
+    nextId = getMaxId(products) + 1;
+  }
+  if (savedList && savedList.length > 0) {
+    shoppingList = savedList;
+    nextListId = getMaxId(shoppingList) + 1;
+  }
+
+  renderProducts();
+  renderShoppingList();
+  updateStats();
+  document.getElementById('settings-product-count').textContent = products.length;
+  showToast('&#9989; Backup ripristinato!');
+}
+
+function showClearAllConfirm() {
+  showConfirmModal(
+    'Svuota tutto',
+    'Sei sicuro di voler eliminare TUTTI i dati? Questa azione non può essere annullata.',
+    '&#128295;',
+    '&#9989; Sì, svuota tutto',
+    function() {
+      Storage.clearAll();
+      products = [];
+      shoppingList = [];
+      nextId = 1;
+      nextListId = 1;
+      renderProducts();
+      renderShoppingList();
+      updateStats();
+      document.getElementById('settings-product-count').textContent = '0';
+      showToast('&#128465; Tutti i dati eliminati');
+    },
+    '&#10060; Annulla',
+    function() {}
+  );
+}
+
+// ============================================================
 // RICETTE (LEGACY)
 // ============================================================
 
@@ -1711,6 +1930,7 @@ function toggleTorch() {
 }
 
 function captureBarcode() {
+  if (scanTimeout) { clearTimeout(scanTimeout); scanTimeout = null; }
   var frameData = BarcodeScanner.scanFrame();
   if (frameData) {
     showToast('&#128247; Frame catturato, analisi...');
