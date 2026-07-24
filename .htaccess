@@ -1,0 +1,39 @@
+# ScanEan PWA - Configurazione Apache
+
+# Abilita mod_rewrite
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Se il file/cartella non esiste, servi index.html (SPA fallback)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . index.html [L]
+</IfModule>
+
+# Header di sicurezza e PWA
+<IfModule mod_headers.c>
+  # Service Worker richiede scope corretto
+  Header always set Service-Worker-Allowed "/"
+
+  # Cache control per asset statici
+  <FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+    Header set Cache-Control "max-age=31536000, immutable"
+  </FilesMatch>
+
+  # No cache per HTML e manifest
+  <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  # CORS per font e icone
+  Header set Access-Control-Allow-Origin "*"
+</IfModule>
+
+# Compressione GZIP
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json
+</IfModule>
+
+# MIME types corretti
+AddType application/javascript .js
+AddType application/manifest+json .json
