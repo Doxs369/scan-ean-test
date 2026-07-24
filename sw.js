@@ -1,11 +1,10 @@
 /**
- * ScanEan Service Worker v4
- * Cache versioning automatico + strategia Network First per asset dinamici
+ * ScanEan Service Worker v5
+ * Controllo periodico in background, update silenzioso al prossimo avvio
  */
 
 // ==== CAMBIA QUESTO NUMERO AD OGNI DEPLOY ====
-// Esempi validi: '1.0', '1.1', '2.0', '3', 'v2.1'
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 // =============================================
 
 const CACHE_NAME = 'scanean-v' + APP_VERSION;
@@ -31,7 +30,6 @@ const STATIC_ASSETS = [
   './icons/icon-512x512.png'
 ];
 
-// File che devono sempre essere aggiornati dal network (mai cache stale)
 const NETWORK_FIRST_PATTERNS = [
   /\.html$/,
   /\.js$/,
@@ -66,7 +64,7 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// Attivazione: pulizia cache vecchie + claim clients + notifica aggiornamento
+// Attivazione: pulizia cache vecchie + claim clients
 self.addEventListener('activate', function(event) {
   console.log('[SW] Attivazione v' + APP_VERSION + '...');
   event.waitUntil(
@@ -84,18 +82,6 @@ self.addEventListener('activate', function(event) {
       .then(function() {
         return self.clients.claim();
       })
-      .then(function() {
-        // Notifica a TUTTI i client che c'e un aggiornamento
-        return self.clients.matchAll({ type: 'window' });
-      })
-      .then(function(clients) {
-        clients.forEach(function(client) {
-          client.postMessage({
-            type: 'SW_UPDATED',
-            version: APP_VERSION
-          });
-        });
-      })
   );
 });
 
@@ -104,17 +90,14 @@ self.addEventListener('fetch', function(event) {
   var request = event.request;
   var url = new URL(request.url);
 
-  // Ignora richieste non GET
   if (request.method !== 'GET') {
     return;
   }
 
-  // Ignora protocolli non http(s)
   if (!url.protocol.startsWith('http')) {
     return;
   }
 
-  // Per risorse esterne (CDN, API): Network First con fallback cache
   if (url.hostname !== self.location.hostname) {
     if (isExternalAPI(url)) {
       event.respondWith(networkFirst(request));
@@ -122,7 +105,6 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Per asset locali: Network First se e HTML/JS/CSS, altrimenti Cache First
   if (isNetworkFirst(url)) {
     event.respondWith(networkFirst(request));
   } else {
@@ -202,13 +184,6 @@ function networkFirst(request) {
         });
     });
 }
-
-// Gestione messaggi dal client (es. skip waiting)
-self.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
 
 // Gestione push notification
 self.addEventListener('push', function(event) {

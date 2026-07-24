@@ -34,7 +34,7 @@
 <link rel="apple-touch-startup-image" href="./icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
 
 <title>ScanEan - Gestione Dispensa</title>
-<link rel="stylesheet" href="./style.css?v=1.0">
+<link rel="stylesheet" href="./style.css?v=1.1">
 <style>
 /* Stili aggiuntivi per ricette TheMealDB */
 .recipe-img-thumb {
@@ -965,24 +965,45 @@
   })();
   </script>
 
-<!-- SW Update Handler -->
+<!-- SW Periodic Update Check -->
 <script>
 (function() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', function(event) {
-      if (event.data && event.data.type === 'SW_UPDATED') {
-        console.log('[PWA] Nuova versione rilevata: ' + event.data.version);
-        // Mostra toast opzionale all'utente
-        if (typeof showToast === 'function') {
-          showToast('&#128260; Aggiornamento disponibile! Ricarico...');
-        }
-        // Ricarica la pagina dopo 1.5 secondi per usare la nuova versione
-        setTimeout(function() {
-          window.location.reload();
-        }, 1500);
-      }
+  'use strict';
+
+  if (!('serviceWorker' in navigator)) return;
+
+  // Controlla ogni 5 minuti se c'e un nuovo Service Worker
+  var CHECK_INTERVAL = 5 * 60 * 1000; // 5 minuti
+  var isChecking = false;
+
+  function checkForUpdate() {
+    if (isChecking) return;
+    isChecking = true;
+
+    navigator.serviceWorker.ready.then(function(registration) {
+      // Forza il controllo aggiornamenti dal server (bypass cache)
+      registration.update().then(function() {
+        console.log('[PWA] Controllo aggiornamenti completato');
+      }).catch(function(err) {
+        console.log('[PWA] Controllo aggiornamenti fallito:', err);
+      }).finally(function() {
+        isChecking = false;
+      });
     });
   }
+
+  // Primo controllo dopo 10 secondi dall'avvio
+  setTimeout(checkForUpdate, 10000);
+
+  // Controllo periodico ogni 5 minuti
+  setInterval(checkForUpdate, CHECK_INTERVAL);
+
+  // Quando il browser trova un nuovo SW in attesa, NON mostrare toast
+  // L'update verra applicato automaticamente al prossimo avvio dell'app
+  navigator.serviceWorker.addEventListener('controllerchange', function() {
+    console.log('[PWA] Nuovo Service Worker attivato al prossimo avvio');
+  });
+
 })();
 </script>
 
