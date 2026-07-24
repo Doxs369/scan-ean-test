@@ -223,15 +223,14 @@
     </div>
 
     <div id="manual-barcode-overlay" class="manual-barcode" style="display:none;">
-    <div style="margin-bottom:12px;">
-      <input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13" style="width:100%;margin-bottom:8px;">
-      <button onclick="processManualBarcode()" style="width:100%;">&#128270; Cerca prodotto</button>
-    </div>
-    <div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">
-      <div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:8px;">Oppure scatta una foto del prodotto</div>
-      <button onclick="openCameraForManualProduct()" style="width:100%;background:var(--accent);">&#128247; Scatta foto prodotto</button>
+    <div class="manual-barcode-inner">
+      <input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13">
+      <button class="manual-barcode-btn primary" onclick="processManualBarcode()">&#128270; Cerca prodotto</button>
+      <div class="manual-barcode-divider">Oppure scatta una foto del prodotto</div>
+      <button class="manual-barcode-btn accent" onclick="openCameraForManualProduct()">&#128247; Scatta foto prodotto</button>
     </div>
   </div>
+
   <div class="scanner-top-bar">
       <button class="scanner-close" onclick="stopScanner(); navigateTo('pantry');">&#10005;</button>
       <div class="scanner-mode-badge">

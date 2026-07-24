@@ -169,7 +169,7 @@ body {
 }
 .filter-chips::-webkit-scrollbar { display: none; }
 .chip {
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
@@ -178,6 +178,12 @@ body {
   transition: all 0.2s;
   border: 1.5px solid transparent;
   user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+  min-height: 36px;
 }
 .chip.active {
   background: var(--primary);
@@ -340,8 +346,8 @@ body {
   display: none;
 }
 .scanner-frame {
-  width: 260px;
-  height: 260px;
+  width: 220px;
+  height: 220px;
   border: 3px solid var(--primary);
   border-radius: 20px;
   position: relative;
@@ -382,7 +388,7 @@ body {
 }
 .scanner-hint {
   position: absolute;
-  bottom: 130px;
+  bottom: 180px;
   z-index: 3;
   color: white;
   font-size: 14px;
@@ -445,32 +451,56 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 10;
-  background: rgba(0,0,0,0.8);
-  padding: 24px;
+  background: rgba(0,0,0,0.85);
+  padding: 24px 20px;
   border-radius: var(--radius-md);
   text-align: center;
   display: none;
+  width: calc(100% - 48px);
+  max-width: 320px;
+}
+.manual-barcode-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .manual-barcode input {
-  width: 200px;
-  padding: 12px;
+  width: 100%;
+  padding: 14px 16px;
   border-radius: var(--radius-sm);
   border: 2px solid var(--primary);
   background: white;
   font-size: 16px;
   text-align: center;
   letter-spacing: 2px;
-  margin-bottom: 12px;
+  outline: none;
 }
-.manual-barcode button {
-  padding: 12px 24px;
+.manual-barcode-btn {
+  width: 100%;
+  padding: 14px 16px;
   border-radius: var(--radius-sm);
-  background: var(--primary);
-  color: white;
   border: none;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.manual-barcode-btn.primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+}
+.manual-barcode-btn.accent {
+  background: linear-gradient(135deg, var(--accent), #D47050);
+  color: white;
+}
+.manual-barcode-divider {
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 0;
 }
 
 /* API Loading */
@@ -1054,7 +1084,7 @@ body {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 380px) {
-  .scanner-frame { width: 220px; height: 220px; }
+  .scanner-frame { width: 180px; height: 180px; }
   .stat-number { font-size: 22px; }
 }
 
@@ -1709,6 +1739,8 @@ body {
   transition: all 0.2s;
 }
 
+
+
 /* ===== REGOLE DA INDEX.HTML ===== */
 .recipe-img-thumb {
   width: 48px;
@@ -1882,139 +1914,6 @@ body {
   font-weight: 600;
   text-align: center;
   margin-bottom: 20px;
-}
-
-.expiry-camera-overlay {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: 1000;
-  display: none;
-  flex-direction: column;
-}
-.expiry-camera-overlay.active {
-  display: flex;
-}
-.expiry-camera-video {
-  flex: 1;
-  width: 100%;
-  object-fit: cover;
-}
-.expiry-camera-frame {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 320px;
-  height: 120px;
-  border: 3px dashed var(--accent);
-  border-radius: 12px;
-  background: rgba(231, 141, 110, 0.1);
-  pointer-events: none;
-  animation: expiryPulse 1.5s ease-in-out infinite;
-}
-@keyframes expiryPulse {
-  0%, 100% { border-color: var(--accent); opacity: 0.6; }
-  50% { border-color: var(--primary); opacity: 1; }
-}
-.expiry-camera-hint {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -100px);
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
-  text-align: center;
-  pointer-events: none;
-  z-index: 5;
-}
-.expiry-camera-status {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, 80px);
-  color: var(--primary-light);
-  font-size: 13px;
-  font-weight: 600;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
-  text-align: center;
-  pointer-events: none;
-  z-index: 5;
-  background: rgba(0,0,0,0.5);
-  padding: 8px 16px;
-  border-radius: 20px;
-}
-.expiry-camera-actions {
-  position: absolute;
-  bottom: 40px;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 24px;
-  z-index: 10;
-  padding: 0 20px;
-}
-.expiry-camera-btn {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 4px solid white;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.expiry-camera-btn-inner {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: white;
-}
-.expiry-camera-close {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.15);
-  border: none;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.expiry-ocr-loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0,0,0,0.8);
-  padding: 24px 32px;
-  border-radius: var(--radius-md);
-  text-align: center;
-  z-index: 20;
-  display: none;
-}
-.expiry-ocr-loading.active {
-  display: block;
-}
-.expiry-ocr-loading .spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 12px;
-}
-.expiry-ocr-loading-text {
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .pwa-install-banner {

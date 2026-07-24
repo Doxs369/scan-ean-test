@@ -457,7 +457,7 @@ function handleManualProductPhoto(event) {
     btnCamera.style.display = 'none';
 
     // Nascondi input manuale
-    var manualDiv = document.getElementById('manual-barcode-input');
+    var manualDiv = document.getElementById('manual-barcode-overlay');
     if (manualDiv) manualDiv.style.display = 'none';
 
     document.getElementById('scan-result').classList.add('show');
@@ -2047,7 +2047,6 @@ function scanExpiryDate() {
     console.error('Errore fotocamera data:', err);
     showToast('&#10060; Errore fotocamera: ' + err.message);
     setExpiryButtonLoading(false);
-    statusDiv.style.display = 'none';
   });
 }
 
