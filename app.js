@@ -64,8 +64,6 @@ function init() {
   renderProducts();
   renderShoppingList();
   updateStats();
-  renderDailyRecipes();
-
   Camera.init('camera-video');
   BarcodeScanner.init('camera-video', 'camera-canvas', onBarcodeDetected);
 
@@ -134,178 +132,15 @@ function runDailyCleanup() {
 // RICETTE DEL GIORNO — SOLO PRODOTTO IN SCADENZA OGGI (IT)
 // ============================================================
 function loadDailyRecipesFromAPI() {
-  var expiringToday = RecipesAPI.getExpiringToday(products);
-  if (expiringToday.length === 0) {
-    dailyRecipes = null;
-    renderDailyRecipes();
-    return;
-  }
-
-  if (dailyRecipes && dailyRecipes.productId === expiringToday[0].id) {
-    renderDailyRecipes();
-    return;
-  }
-
-  var product = expiringToday[0];
-  showToast('&#127860; Cerco ricette per "' + product.name + '"...');
-
-  RecipesAPI.searchByIngredient(product.name)
-    .then(function(recipes) {
-      if (recipes.length > 0) {
-        dailyRecipes = {
-          productName: product.name,
-          productId: product.id,
-          recipes: recipes.slice(0, 5)
-        };
-        RecipesAPI.saveDailyRecipes(dailyRecipes);
-        renderDailyRecipes();
-        showToast('&#9989; ' + recipes.length + ' ricette trovate per ' + product.name + '!');
-      } else {
-        dailyRecipes = { productName: product.name, productId: product.id, recipes: [], noResults: true };
-        RecipesAPI.saveDailyRecipes(dailyRecipes);
-        renderDailyRecipes();
-        showToast('&#128533; Nessuna ricetta trovata per "' + product.name + '"');
-      }
-    });
+  // Ricette disabilitate
 }
 
 function renderDailyRecipes() {
-  var container = document.getElementById('daily-recipes-container');
-  if (!container) return;
-
-  var expiringToday = RecipesAPI.getExpiringToday(products);
-
-  if (expiringToday.length === 0) {
-    container.innerHTML =
-      '<div class="recipe-card" style="opacity:0.7;">' +
-        '<div class="recipe-header">' +
-          '<div class="recipe-icon">&#128994;</div>' +
-          '<div>' +
-            '<div class="recipe-title">Nessun prodotto in scadenza oggi</div>' +
-            '<div class="recipe-ingredients">Tutti i tuoi prodotti sono al sicuro!</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    return;
-  }
-
-  var product = expiringToday[0];
-  var days = getDaysUntilExpiry(product.expiryDate);
-
-  var headerHtml =
-    '<div style="padding:0 16px;margin-bottom:12px;">' +
-      '<div style="font-size:13px;color:var(--text-muted);font-weight:600;">' +
-        '&#9200; Scade ' + (days === 0 ? 'OGGI' : 'tra ' + days + ' gg') + ': <strong style="color:var(--danger);">' + product.name + '</strong>' +
-      '</div>' +
-    '</div>';
-
-  if (!dailyRecipes || dailyRecipes.productId !== product.id) {
-    container.innerHTML = headerHtml +
-      '<div class="recipe-card" style="cursor:pointer;" onclick="loadDailyRecipesFromAPI()">' +
-        '<div class="recipe-header">' +
-          '<div class="recipe-icon">&#127860;</div>' +
-          '<div>' +
-            '<div class="recipe-title">Trova ricette per "' + product.name + '"</div>' +
-            '<div class="recipe-ingredients">Clicca per cercare su TheMealDB</div>' +
-          '</div>' +
-        '</div>' +
-        '<span class="recipe-match">&#128269; Cerca ricette</span>' +
-      '</div>';
-    return;
-  }
-
-  if (dailyRecipes.noResults) {
-    container.innerHTML = headerHtml +
-      '<div class="recipe-card" style="opacity:0.7;">' +
-        '<div class="recipe-header">' +
-          '<div class="recipe-icon">&#128533;</div>' +
-          '<div>' +
-            '<div class="recipe-title">Nessuna ricetta trovata</div>' +
-            '<div class="recipe-ingredients">Prova a cercare manualmente con altri ingredienti</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    return;
-  }
-
-  var html = headerHtml;
-  for (var i = 0; i < dailyRecipes.recipes.length; i++) {
-    var r = dailyRecipes.recipes[i];
-    html +=
-      '<div class="recipe-card" style="cursor:pointer;" onclick="openMealDBRecipe(' + r.id + ')">' +
-        '<div class="recipe-header">' +
-          '<div class="recipe-img-thumb">' +
-            '<img src="' + r.thumb + '" alt="' + r.title + '" loading="lazy">' +
-          '</div>' +
-          '<div style="min-width:0;">' +
-            '<div class="recipe-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.title + '</div>' +
-            '<div class="recipe-ingredients">&#129379; Usa: ' + product.name + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<span class="recipe-match">&#128073; Tocca per la ricetta</span>' +
-      '</div>';
-  }
-  container.innerHTML = html;
+  // Ricette disabilitate
 }
 
 function openMealDBRecipe(recipeId) {
-  showToast('&#9200; Carico dettaglio ricetta...');
-
-  RecipesAPI.getRecipeDetail(recipeId)
-    .then(function(recipe) {
-      if (!recipe) {
-        showToast('&#10060; Ricetta non trovata');
-        return;
-      }
-
-      document.getElementById('recipe-detail-title').textContent = recipe.title;
-
-      var metaHtml = '';
-      if (recipe.category) metaHtml += '<span>&#127860; ' + recipe.category + '</span>';
-      if (recipe.area) metaHtml += '<span>&#127758; ' + recipe.area + '</span>';
-      document.getElementById('recipe-detail-meta').innerHTML = metaHtml;
-
-      var bodyHtml = '';
-
-      if (recipe.thumb) {
-        bodyHtml += '<div style="margin-bottom:16px;">' +
-          '<img src="' + recipe.thumb + '" style="width:100%;border-radius:12px;" alt="' + recipe.title + '">' +
-          '</div>';
-      }
-
-      if (recipe.ingredients && recipe.ingredients.length > 0) {
-        bodyHtml += '<div class="recipe-detail-section">' +
-          '<div class="recipe-detail-section-title">&#129379; Ingredienti</div>' +
-          '<div class="recipe-ingredients-list">';
-        for (var i = 0; i < recipe.ingredients.length; i++) {
-          bodyHtml += '<span class="recipe-ingredient-tag">' + recipe.ingredients[i] + '</span>';
-        }
-        bodyHtml += '</div></div>';
-      }
-
-      if (recipe.instructions && recipe.instructions.length > 0) {
-        bodyHtml += '<div class="recipe-detail-section">' +
-          '<div class="recipe-detail-section-title">&#128221; Preparazione</div>' +
-          '<div class="recipe-steps-list">';
-        for (var j = 0; j < recipe.instructions.length; j++) {
-          bodyHtml += '<div class="recipe-step">' +
-            '<div class="recipe-step-number">' + (j + 1) + '</div>' +
-            '<div class="recipe-step-text">' + recipe.instructions[j] + '</div>' +
-          '</div>';
-        }
-        bodyHtml += '</div></div>';
-      }
-
-      if (recipe.youtube) {
-        bodyHtml += '<div class="recipe-detail-section">' +
-          '<div class="recipe-detail-section-title">&#127909; Video</div>' +
-          '<a href="' + recipe.youtube + '" target="_blank" style="color:var(--primary);font-weight:700;font-size:14px;">&#9654; Guarda su YouTube</a>' +
-          '</div>';
-      }
-
-      document.getElementById('recipe-detail-body').innerHTML = bodyHtml;
-      document.getElementById('recipe-detail-modal').classList.add('show');
-    });
+  // Ricette disabilitate
 }
 
 // ============================================================
@@ -326,7 +161,6 @@ function navigateTo(screen) {
   else if (screen === 'pantry') {
     renderProducts();
     updateStats();
-    renderDailyRecipes();
   }
 }
 
