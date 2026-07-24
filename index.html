@@ -359,6 +359,12 @@
 </head>
 <body>
 
+<div class="desktop-block">
+  <div style="font-size:64px;margin-bottom:16px;">&#128241;</div>
+  <h1>ScanEan</h1>
+  <p>Questa app è disponibile solo su smartphone.<br>Apri questa pagina dal tuo dispositivo mobile per usarla.</p>
+</div>
+
 <div class="app-frame">
 
   <!-- SPLASH SCREEN -->
@@ -464,13 +470,6 @@
 
     <div id="products-list"></div>
 
-    <!-- RICETTE DEL GIORNO -->
-    <div class="section-header" style="margin-top: 24px;">
-      <div class="section-title">&#127860; Ricette per oggi</div>
-      <a class="section-link" onclick="loadDailyRecipesFromAPI()">&#128260; Aggiorna</a>
-    </div>
-
-    <div id="daily-recipes-container"></div>
   </div>
 
   <!-- SCREEN: SCANNER -->
@@ -745,16 +744,7 @@
       </div>
     </div>
   </div>
-  <!-- PWA INSTALL BANNER -->
-  <div class="toast-banner" id="toast-banner">
-    <div class="toast-banner-icon">📦</div>
-    <div class="toast-banner-text">
-      <div class="toast-banner-title">Installa ScanEan</div>
-      <div class="toast-banner-desc">Aggiungi alla schermata home</div>
-    </div>
-    <button class="toast-banner-btn" id="toast-banner-btn">Installa</button>
-    <button class="toast-banner-close" id="toast-banner-close">&times;</button>
-  </div>
+
 
   <!-- OVERLAY CAMERA PER FOTO DATA SCADENZA -->
   <div class="expiry-camera-overlay" id="expiry-camera-overlay">
@@ -789,10 +779,6 @@
 <script src="./camera.js?v=1.0"></script>
 <script src="./barcode-scanner.js?v=1.0"></script>
 <script src="./app.js?v=1.0"></script>
-<button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
-    <button class="pwa-install-close" id="pwa-install-close">&times;</button>
-  </div>
-
   <!-- Service Worker Registration + PWA Install Logic -->
   <script>
   (function() {
@@ -850,7 +836,10 @@
               console.log('[PWA] Utente ha accettato installazione');
             }
             deferredPrompt = null;
-            if (banner) banner.classList.remove('show');
+            if (banner) {
+              banner.style.transform = 'translateX(-50%) translateY(120%)';
+              banner.classList.remove('show');
+            }
           });
         }
       });
@@ -859,7 +848,10 @@
     // Click su Chiudi
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
-        if (banner) banner.classList.remove('show');
+        if (banner) {
+          banner.style.transform = 'translateX(-50%) translateY(120%)';
+          banner.classList.remove('show');
+        }
         try { localStorage.setItem('scanean_install_dismissed', '1'); } catch(e) {}
       });
     }
@@ -875,6 +867,7 @@
     window.addEventListener('appinstalled', function() {
       console.log('[PWA] App installata!');
       if (banner) {
+        banner.style.transform = 'translateX(-50%) translateY(120%)';
         banner.classList.remove('show');
         banner.style.display = 'none';
       }
@@ -897,18 +890,16 @@
         if (!isDragging) return;
         currentX = e.touches[0].clientX;
         var deltaX = currentX - startX;
-        if (deltaX > 0) {
-          banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
-        }
+        banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
       }, { passive: true });
 
       banner.addEventListener('touchend', function(e) {
         isDragging = false;
         banner.classList.remove('swiping');
         var deltaX = currentX - startX;
-        if (deltaX > threshold) {
+        if (Math.abs(deltaX) > threshold) {
           // Swipe sufficiente -> chiudi
-          banner.style.transform = 'translateX(120%) translateY(0)';
+          banner.style.transform = 'translateX(' + (deltaX > 0 ? '120%' : '-120%') + ') translateY(0)';
           setTimeout(function() {
             banner.classList.remove('show');
             banner.style.transform = '';
@@ -932,17 +923,15 @@
         if (!isDragging) return;
         currentX = e.clientX;
         var deltaX = currentX - startX;
-        if (deltaX > 0) {
-          banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
-        }
+        banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
       });
 
       banner.addEventListener('mouseup', function(e) {
         isDragging = false;
         banner.classList.remove('swiping');
         var deltaX = currentX - startX;
-        if (deltaX > threshold) {
-          banner.style.transform = 'translateX(120%) translateY(0)';
+        if (Math.abs(deltaX) > threshold) {
+          banner.style.transform = 'translateX(' + (deltaX > 0 ? '120%' : '-120%') + ') translateY(0)';
           setTimeout(function() {
             banner.classList.remove('show');
             banner.style.transform = '';
@@ -1009,5 +998,16 @@
 })();
 </script>
 
+
+  <!-- PWA INSTALL BANNER -->
+  <div class="toast-banner" id="toast-banner">
+    <div class="toast-banner-icon">📦</div>
+    <div class="toast-banner-text">
+      <div class="toast-banner-title">Installa ScanEan</div>
+      <div class="toast-banner-desc">Aggiungi alla schermata home</div>
+    </div>
+    <button class="toast-banner-btn" id="toast-banner-btn">Installa</button>
+    <button class="toast-banner-close" id="toast-banner-close">&times;</button>
+  </div>
 </body>
 </html>
