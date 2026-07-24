@@ -1,9 +1,9 @@
 {
   "name": "ScanEan",
   "short_name": "ScanEan",
-  "version": "1.1",
+  "version": "1.2",
   "description": "App per scansionare prodotti e tenere sotto controllo le scadenze",
-  "start_url": "./index.html?v=1.0",
+  "start_url": "./index.html?v=1.2",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#32aa8c",
