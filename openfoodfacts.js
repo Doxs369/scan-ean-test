@@ -8,90 +8,6 @@ var OpenFoodFacts = (function() {
 
   var API_BASE = 'https://world.openfoodfacts.org/api/v0/product/';
   var IMAGE_BASE = 'https://images.openfoodfacts.org/images/products/';
-  var CUSTOM_CAT_KEY = 'scanEan_customCategories';
-
-  var builtInCategories = {
-    dairy: { name: 'Latticini', emoji: '&#129371;' },
-    meat: { name: 'Carne e Pesce', emoji: '&#129385;' },
-    produce: { name: 'Verdura e Frutta', emoji: '&#129388;' },
-    pantry: { name: 'Dispensa', emoji: '&#129387;' },
-    beverages: { name: 'Bevande', emoji: '&#129380;' },
-    frozen: { name: 'Surgelati', emoji: '&#129482;' },
-    bakery: { name: 'Panetteria', emoji: '&#127838;' },
-    sweets: { name: 'Dolci', emoji: '&#127852;' }
-  };
-
-  var categoryKeywords = {
-    dairy: [
-      { word: 'latte', score: 3 }, { word: 'formaggio', score: 3 },
-      { word: 'yogurt', score: 3 }, { word: 'latticino', score: 3 },
-      { word: 'dairy', score: 3 }, { word: 'uovo', score: 2 },
-      { word: 'mozzarella', score: 3 }, { word: 'parmigiano', score: 3 },
-      { word: 'ricotta', score: 3 }, { word: 'burro', score: 2 },
-      { word: 'mascarpone', score: 3 }, { word: 'kefir', score: 3 },
-      { word: 'cream', score: 2 }, { word: 'panna', score: 2 },
-      { word: 'philadelphia', score: 3 }, { word: 'grana', score: 3 }
-    ],
-    meat: [
-      { word: 'carne', score: 3 }, { word: 'pesce', score: 3 },
-      { word: 'pollo', score: 3 }, { word: 'salmone', score: 3 },
-      { word: 'meat', score: 3 }, { word: 'fish', score: 3 },
-      { word: 'prosciutto', score: 3 }, { word: 'bresaola', score: 3 },
-      { word: 'wurstel', score: 3 }, { word: 'salsiccia', score: 3 },
-      { word: 'bacon', score: 3 }, { word: 'ham', score: 3 },
-      { word: 'beef', score: 3 }, { word: 'pork', score: 3 },
-      { word: 'chicken', score: 3 }, { word: 'tuna', score: 3 },
-      { word: 'shrimp', score: 3 }, { word: 'steak', score: 3 },
-      { word: 'sardine', score: 3 }, { word: 'merluzzo', score: 3 }
-    ],
-    produce: [
-      { word: 'verdura', score: 3 }, { word: 'frutta', score: 3 },
-      { word: 'insalata', score: 3 }, { word: 'pomodoro', score: 3 },
-      { word: 'vegetable', score: 3 }, { word: 'fruit', score: 3 },
-      { word: 'spinaci', score: 3 }, { word: 'zucchina', score: 3 },
-      { word: 'melanzana', score: 3 }, { word: 'carota', score: 3 },
-      { word: 'lettuce', score: 3 }, { word: 'apple', score: 3 },
-      { word: 'banana', score: 3 }, { word: 'orange', score: 3 },
-      { word: 'onion', score: 3 }, { word: 'garlic', score: 3 },
-      { word: 'potato', score: 3 }, { word: 'pepper', score: 3 },
-      { word: 'mushroom', score: 3 }, { word: 'broccoli', score: 3 },
-      { word: 'asparagi', score: 3 }, { word: 'cavolfiore', score: 3 }
-    ],
-    beverages: [
-      { word: 'bevanda', score: 3 }, { word: 'bibita', score: 3 },
-      { word: 'vino', score: 3 }, { word: 'beverage', score: 3 },
-      { word: 'drink', score: 3 }, { word: 'acqua', score: 3 },
-      { word: 'succo', score: 3 }, { word: 'birra', score: 3 },
-      { word: 'spumante', score: 3 }, { word: 'liquore', score: 3 },
-      { word: 'wine', score: 3 }, { word: 'beer', score: 3 },
-      { word: 'juice', score: 3 }, { word: 'soda', score: 3 },
-      { word: 'coffee', score: 3 }, { word: 'tea', score: 3 },
-      { word: 'milk', score: 2 }, { word: 'caffe', score: 3 },
-      { word: 'the', score: 3 }, { word: 'tisana', score: 3 }
-    ],
-    frozen: [
-      { word: 'surgelato', score: 3 }, { word: 'congelato', score: 3 },
-      { word: 'frozen', score: 3 }, { word: 'gelato', score: 3 },
-      { word: 'surghi', score: 3 }, { word: 'ice cream', score: 3 },
-      { word: 'surgh', score: 3 }
-    ],
-    bakery: [
-      { word: 'pane', score: 3 }, { word: 'biscotto', score: 3 },
-      { word: 'cracker', score: 3 }, { word: 'fette', score: 2 },
-      { word: 'bread', score: 3 }, { word: 'cookie', score: 3 },
-      { word: 'toast', score: 3 }, { word: 'croissant', score: 3 },
-      { word: 'brioche', score: 3 }, { word: 'ciabatta', score: 3 },
-      { word: 'focaccia', score: 3 }, { word: 'baguette', score: 3 }
-    ],
-    sweets: [
-      { word: 'dolce', score: 3 }, { word: 'cioccolato', score: 3 },
-      { word: 'caramella', score: 3 }, { word: 'sweet', score: 3 },
-      { word: 'chocolate', score: 3 }, { word: 'candy', score: 3 },
-      { word: 'biscotti', score: 2 }, { word: 'cake', score: 3 },
-      { word: 'torta', score: 3 }, { word: 'miele', score: 2 },
-      { word: 'nutella', score: 3 }, { word: 'marmellata', score: 2 }
-    ]
-  };
 
   /**
    * Cerca un prodotto per barcode
@@ -279,7 +195,7 @@ var OpenFoodFacts = (function() {
   }
 
   /**
-   * Rileva la categoria del prodotto con sistema a punteggio
+   * Rileva la categoria del prodotto
    */
   function detectCategory(product) {
     var cats = (product.categories || []).join(' ').toLowerCase();
@@ -287,123 +203,91 @@ var OpenFoodFacts = (function() {
     var name = (product.name || '').toLowerCase();
     var allText = cats + ' ' + labels + ' ' + name;
 
-    var scores = {
-      dairy: 0, meat: 0, produce: 0, pantry: 0,
-      beverages: 0, frozen: 0, bakery: 0, sweets: 0
-    };
-
-    // Built-in scoring
-    for (var cat in categoryKeywords) {
-      if (!categoryKeywords.hasOwnProperty(cat)) continue;
-      var list = categoryKeywords[cat];
-      for (var i = 0; i < list.length; i++) {
-        if (allText.indexOf(list[i].word) !== -1) {
-          scores[cat] += list[i].score;
-        }
-      }
+    if (allText.indexOf('latte') !== -1 || allText.indexOf('formaggio') !== -1 ||
+        allText.indexOf('yogurt') !== -1 || allText.indexOf('latticino') !== -1 ||
+        allText.indexOf('dairy') !== -1 || allText.indexOf('uovo') !== -1 ||
+        allText.indexOf('mozzarella') !== -1 || allText.indexOf('parmigiano') !== -1 ||
+        allText.indexOf('ricotta') !== -1 || allText.indexOf('burro') !== -1) {
+      return 'dairy';
     }
 
-    // Custom categories scoring
-    var customCats = loadCustomCategories();
-    for (var j = 0; j < customCats.length; j++) {
-      var cc = customCats[j];
-      if (allText.indexOf(cc.keyword.toLowerCase()) !== -1) {
-        if (scores[cc.category] === undefined) scores[cc.category] = 0;
-        scores[cc.category] += (cc.priority || 1);
-      }
+    if (allText.indexOf('carne') !== -1 || allText.indexOf('pesce') !== -1 ||
+        allText.indexOf('pollo') !== -1 || allText.indexOf('salmone') !== -1 ||
+        allText.indexOf('meat') !== -1 || allText.indexOf('fish') !== -1 ||
+        allText.indexOf('prosciutto') !== -1 || allText.indexOf('bresaola') !== -1 ||
+        allText.indexOf('wurstel') !== -1 || allText.indexOf('salsiccia') !== -1) {
+      return 'meat';
     }
 
-    // Trova categoria con punteggio massimo
-    var bestCat = 'pantry';
-    var bestScore = 0;
-    for (var c in scores) {
-      if (scores[c] > bestScore) {
-        bestScore = scores[c];
-        bestCat = c;
-      }
+    if (allText.indexOf('verdura') !== -1 || allText.indexOf('frutta') !== -1 ||
+        allText.indexOf('insalata') !== -1 || allText.indexOf('pomodoro') !== -1 ||
+        allText.indexOf('vegetable') !== -1 || allText.indexOf('fruit') !== -1 ||
+        allText.indexOf('spinaci') !== -1 || allText.indexOf('zucchina') !== -1 ||
+        allText.indexOf('melanzana') !== -1 || allText.indexOf('carota') !== -1) {
+      return 'produce';
     }
 
-    return bestCat;
-  }
-
-  /**
-   * Carica categorie custom da localStorage
-   */
-  function loadCustomCategories() {
-    try {
-      var data = localStorage.getItem(CUSTOM_CAT_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /**
-   * Salva categorie custom in localStorage
-   */
-  function saveCustomCategories(cats) {
-    try {
-      localStorage.setItem(CUSTOM_CAT_KEY, JSON.stringify(cats));
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /**
-   * Restituisce tutte le categorie (built-in + custom)
-   */
-  function getAllCategories() {
-    var result = [];
-    for (var id in builtInCategories) {
-      if (builtInCategories.hasOwnProperty(id)) {
-        result.push({
-          id: id,
-          name: builtInCategories[id].name,
-          emoji: builtInCategories[id].emoji
-        });
-      }
+    if (allText.indexOf('bevanda') !== -1 || allText.indexOf('bibita') !== -1 ||
+        allText.indexOf('vino') !== -1 || allText.indexOf('beverage') !== -1 ||
+        allText.indexOf('drink') !== -1 || allText.indexOf('acqua') !== -1 ||
+        allText.indexOf('succo') !== -1 || allText.indexOf('birra') !== -1 ||
+        allText.indexOf('spumante') !== -1 || allText.indexOf('liquore') !== -1) {
+      return 'beverages';
     }
 
-    var custom = loadCustomCategories();
-    var seen = {};
-    for (var i = 0; i < result.length; i++) {
-      seen[result[i].id] = true;
+    if (allText.indexOf('surgelato') !== -1 || allText.indexOf('congelato') !== -1 ||
+        allText.indexOf('frozen') !== -1 || allText.indexOf('gelato') !== -1 ||
+        allText.indexOf('surghi') !== -1) {
+      return 'frozen';
     }
 
-    for (var j = 0; j < custom.length; j++) {
-      var catId = custom[j].category;
-      if (!seen[catId]) {
-        seen[catId] = true;
-        result.push({
-          id: catId,
-          name: catId.charAt(0).toUpperCase() + catId.slice(1),
-          emoji: '&#128230;'
-        });
-      }
+    if (allText.indexOf('pane') !== -1 || allText.indexOf('biscotto') !== -1 ||
+        allText.indexOf('cracker') !== -1 || allText.indexOf('fette') !== -1 ||
+        allText.indexOf('bread') !== -1 || allText.indexOf('cookie') !== -1) {
+      return 'bakery';
     }
 
-    return result;
+    if (allText.indexOf('dolce') !== -1 || allText.indexOf('cioccolato') !== -1 ||
+        allText.indexOf('caramella') !== -1 || allText.indexOf('sweet') !== -1 ||
+        allText.indexOf('chocolate') !== -1 || allText.indexOf('candy') !== -1) {
+      return 'sweets';
+    }
+
+    return 'pantry';
   }
 
   /**
    * Ottieni emoji per categoria
    */
   function getCategoryEmoji(category) {
-    if (builtInCategories[category]) {
-      return builtInCategories[category].emoji;
-    }
-    return '&#128230;';
+    var emojis = {
+      dairy: '&#129371;',
+      meat: '&#129385;',
+      produce: '&#129388;',
+      pantry: '&#129387;',
+      beverages: '&#129380;',
+      frozen: '&#129482;',
+      bakery: '&#127838;',
+      sweets: '&#127852;'
+    };
+    return emojis[category] || '&#128230;';
   }
 
   /**
    * Ottieni nome italiano categoria
    */
   function getCategoryName(category) {
-    if (builtInCategories[category]) {
-      return builtInCategories[category].name;
-    }
-    return category.charAt(0).toUpperCase() + category.slice(1);
+    var names = {
+      dairy: 'Latticini',
+      meat: 'Carne e Pesce',
+      produce: 'Verdura e Frutta',
+      pantry: 'Dispensa',
+      beverages: 'Bevande',
+      frozen: 'Surgelati',
+      bakery: 'Panetteria',
+      sweets: 'Dolci'
+    };
+    return names[category] || 'Altro';
   }
 
   // API pubblica
@@ -411,9 +295,6 @@ var OpenFoodFacts = (function() {
     search: searchProduct,
     detectCategory: detectCategory,
     getCategoryEmoji: getCategoryEmoji,
-    getCategoryName: getCategoryName,
-    getAllCategories: getAllCategories,
-    loadCustomCategories: loadCustomCategories,
-    saveCustomCategories: saveCustomCategories
+    getCategoryName: getCategoryName
   };
 })();
