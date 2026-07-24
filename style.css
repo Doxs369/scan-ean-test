@@ -1711,8 +1711,8 @@ body {
 /* Emoji preview MOBILE (dentro l'input, visibile solo su telefono) */
 .shopping-emoji-preview-mobile {
   position: absolute;
-  right: 14px;
-  top: 50%;
+  right: 34px;
+  top: calc(50% - 1px);
   transform: translateY(-50%);
   font-size: 22px;
   pointer-events: none;
