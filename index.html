@@ -35,20 +35,6 @@
 
 <title>ScanEan - Gestione Dispensa</title>
 <link rel="stylesheet" href="./style.css?v=1.2">
-<script>
-/* Safety net splash - nasconde sempre entro 3.5s anche se JS principale fallisce */
-(function(){
-  var done=false;
-  function hide(){
-    if(done) return;
-    done=true;
-    var s=document.getElementById('splash');
-    if(s){ s.classList.add('hidden'); s.style.display='none'; }
-  }
-  window.addEventListener('load',function(){ setTimeout(hide,3000); });
-  setTimeout(hide,4000);
-})();
-</script>
 <style>
 /* Stili aggiuntivi per ricette TheMealDB */
 .recipe-img-thumb {
@@ -369,115 +355,7 @@
 /* Extra padding per schermata lista spesa */
 #screen-list {
   padding-bottom: 40px;
-}
-/* ===== SETTINGS PAGE ===== */
-.settings-section {
-  background: white;
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-.settings-section-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
-}
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-}
-.settings-row:last-child {
-  border-bottom: none;
-}
-.settings-row span {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.settings-info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  font-size: 14px;
-  color: var(--text-muted);
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-}
-.settings-info-row:last-child {
-  border-bottom: none;
-}
-.settings-info-row span:last-child {
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-/* Toggle switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 28px;
-}
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #ccc;
-  border-radius: 28px;
-  transition: .3s;
-}
-.toggle-slider:before {
-  position: absolute;
-  content: "";
-  height: 22px;
-  width: 22px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  border-radius: 50%;
-  transition: .3s;
-}
-.toggle-switch input:checked + .toggle-slider {
-  background-color: var(--primary);
-}
-.toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(20px);
-}
-
-/* Import preview modal */
-.import-preview-box {
-  background: var(--bg);
-  border-radius: 12px;
-  padding: 16px;
-  margin: 12px 0;
-  text-align: left;
-}
-.import-preview-box .preview-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  font-size: 14px;
-}
-.import-preview-box .preview-row span:first-child {
-  color: var(--text-muted);
-}
-.import-preview-box .preview-row span:last-child {
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-</style>
+}</style>
 </head>
 <body>
 
@@ -544,10 +422,7 @@
     <div class="header">
       <div class="header-top">
         <div class="logo-text">Scan<span>Ean</span></div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="header-avatar" style="cursor:pointer;font-size:20px;" onclick="navigateTo('settings')" title="Impostazioni">&#9881;</div>
-          <div class="header-avatar">&#128100;</div>
-        </div>
+        <div class="header-avatar">&#128100;</div>
       </div>
       <div class="search-bar">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -602,13 +477,6 @@
   <div class="screen" id="screen-scanner">
     <div class="scanner-container">
       <div class="scanner-overlay"></div>
-    <!-- Overlay input manuale EAN -->
-    <div class="manual-barcode" id="manual-barcode-overlay" style="display:none;">
-      <div style="color:white;font-size:14px;font-weight:700;margin-bottom:12px;text-shadow:0 2px 8px rgba(0,0,0,0.8);">Inserisci il codice a barre</div>
-      <input type="text" id="manual-ean-input" placeholder="EAN-13" maxlength="13" inputmode="numeric" pattern="[0-9]*" autocomplete="off" onkeydown="if(event.key==='Enter'){processManualBarcode();}">
-      <button onclick="processManualBarcode()">&#128270; Cerca prodotto</button>
-      <button onclick="hideManualBarcode()" style="background:rgba(255,255,255,0.2);margin-top:8px;">&#10005; Chiudi</button>
-    </div>
 
       <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
       <canvas id="camera-canvas" style="display:none;"></canvas>
@@ -641,7 +509,9 @@
           </div>
         </div>
 
-          <div class="form-group">
+        <img class="camera-preview" id="camera-preview" alt="Foto prodotto">
+
+        <div class="form-group">
           <label class="form-label">Nome prodotto</label>
           <input type="text" class="form-input" id="product-name-input" placeholder="Inserisci il nome del prodotto...">
         </div>
@@ -659,6 +529,10 @@
           <label class="form-label">Quantita</label>
           <input type="number" class="form-input" id="qty-input" value="1" min="1">
         </div>
+
+        <button class="btn btn-accent" id="btn-camera" onclick="openCamera()" style="display:none;">
+          &#128247; Scatta foto al prodotto
+        </button>
 
         <button class="btn btn-primary" onclick="addProduct()">&#10133; Aggiungi alla dispensa</button>
         <button class="btn btn-secondary" onclick="closeScanResult()">Annulla</button>
@@ -680,10 +554,7 @@
     <div class="header">
       <div class="header-top">
         <div class="logo-text">Scan<span>Ean</span></div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div class="header-avatar" style="cursor:pointer;font-size:20px;" onclick="navigateTo('settings')" title="Impostazioni">&#9881;</div>
-          <div class="header-avatar">&#128100;</div>
-        </div>
+        <div class="header-avatar">&#128100;</div>
       </div>
     </div>
 
@@ -718,52 +589,7 @@
     <div id="shopping-list"></div>
   </div>
 
-  
-  <!-- SCREEN: SETTINGS -->
-  <div class="screen" id="screen-settings">
-    <div class="header">
-      <div class="header-top">
-        <button onclick="navigateTo('pantry')" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;padding:0;">&#8592;</button>
-        <div class="logo-text">Impostazioni</div>
-        <div style="width:32px;"></div>
-      </div>
-    </div>
-
-    <div style="padding:16px;">
-      <div style="background:var(--card);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px;">&#128190; Backup & Ripristino</div>
-        <button class="btn btn-primary" onclick="exportBackup()" style="width:100%;margin-bottom:10px;">&#128190; Esporta dati (JSON)</button>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;text-align:center;">Salva un file con tutti i prodotti e la lista spesa</div>
-        <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()" style="width:100%;margin-bottom:10px;">&#128449; Carica backup</button>
-        <input type="file" id="import-file" accept="application/json" style="display:none;" onchange="importBackup(event)">
-        <div style="font-size:12px;color:var(--text-muted);text-align:center;">Seleziona un file .json precedentemente esportato</div>
-      </div>
-
-      <div style="background:var(--card);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px;">&#8505; Info</div>
-        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(59,176,149,0.08);">
-          <span style="font-size:14px;color:var(--text-muted);">Versione app</span>
-          <span style="font-size:14px;font-weight:700;color:var(--text-primary);">1.2</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(59,176,149,0.08);">
-          <span style="font-size:14px;color:var(--text-muted);">Prodotti salvati</span>
-          <span style="font-size:14px;font-weight:700;color:var(--text-primary);" id="settings-product-count">0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:10px 0;">
-          <span style="font-size:14px;color:var(--text-muted);">Storage</span>
-          <span style="font-size:14px;font-weight:700;color:var(--primary);">localStorage</span>
-        </div>
-      </div>
-
-      <div style="background:var(--card);border-radius:var(--radius-lg);padding:20px;">
-        <div style="font-size:13px;font-weight:800;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px;">&#128295; Gestione dati</div>
-        <button class="btn btn-danger" onclick="showClearAllConfirm()" style="width:100%;">&#128465; Svuota tutto</button>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center;">Elimina tutti i prodotti, la lista spesa e le impostazioni</div>
-      </div>
-    </div>
-  </div>
-
-<!-- BOTTOM NAV -->
+  <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <button class="nav-item active" onclick="navigateTo('pantry')" id="nav-pantry">
       <span id="nav-pantry-icon" class="nav-emoji">🏠</span>
@@ -948,6 +774,12 @@
     </div>
   </div>
 
+  <!-- Input file per foto prodotto (da scanner con API) -->
+  <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleCameraPhoto(event)">
+
+  <!-- Input file per foto prodotto manuale (senza API) -->
+  <input type="file" id="camera-input-manual" accept="image/*" capture="environment" onchange="handleManualProductPhoto(event)">
+
 </div>
 
 <!-- MODULI JS -->
@@ -957,7 +789,9 @@
 <script src="./camera.js?v=1.0"></script>
 <script src="./barcode-scanner.js?v=1.0"></script>
 <script src="./app.js?v=1.0"></script>
-
+<button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
+    <button class="pwa-install-close" id="pwa-install-close">&times;</button>
+  </div>
 
   <!-- Service Worker Registration + PWA Install Logic -->
   <script>
