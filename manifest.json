@@ -60,21 +60,35 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["food", "lifestyle", "utilities"],
+  "categories": [
+    "food",
+    "lifestyle",
+    "utilities"
+  ],
   "shortcuts": [
     {
       "name": "Scanner",
       "short_name": "Scanner",
       "description": "Avvia lo scanner barcode",
       "url": "./index.html?action=scan",
-      "icons": [{ "src": "icons/shortcut-scan.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "icons/shortcut-scan.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "Lista spesa",
       "short_name": "Lista",
       "description": "Apri la lista della spesa",
       "url": "./index.html?screen=list",
-      "icons": [{ "src": "icons/shortcut-list.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "icons/shortcut-list.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }

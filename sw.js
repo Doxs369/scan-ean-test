@@ -1,9 +1,13 @@
 /**
- * ScanEan Service Worker v3
- * Caching offline con percorsi relativi per funzionare in qualsiasi cartella
+ * ScanEan Service Worker v5
+ * Controllo periodico in background, update silenzioso al prossimo avvio
  */
 
-const CACHE_NAME = 'scanean-v3';
+// Versione caricata automaticamente da version.js
+self.importScripts('./version.js');
+
+
+const CACHE_NAME = 'scanean-' + APP_BUILD;
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -26,13 +30,29 @@ const STATIC_ASSETS = [
   './icons/icon-512x512.png'
 ];
 
+const NETWORK_FIRST_PATTERNS = [
+  /\.html$/,
+  /\.js$/,
+  /\.css$/,
+  /manifest\.json$/
+];
+
+function isNetworkFirst(url) {
+  for (var i = 0; i < NETWORK_FIRST_PATTERNS.length; i++) {
+    if (NETWORK_FIRST_PATTERNS[i].test(url.pathname)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Installazione: cache degli asset statici
 self.addEventListener('install', function(event) {
-  console.log('[SW] Installazione in corso...');
+  console.log('[SW] Installazione build ' + APP_BUILD + '...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(function(cache) {
-        console.log('[SW] Caching asset statici');
+        console.log('[SW] Caching asset statici build ' + APP_BUILD);
         return cache.addAll(STATIC_ASSETS);
       })
       .then(function() {
@@ -46,7 +66,7 @@ self.addEventListener('install', function(event) {
 
 // Attivazione: pulizia cache vecchie + claim clients
 self.addEventListener('activate', function(event) {
-  console.log('[SW] Attivazione...');
+  console.log('[SW] Attivazione build ' + APP_BUILD + '...');
   event.waitUntil(
     caches.keys()
       .then(function(cacheNames) {
@@ -65,22 +85,19 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Fetch: strategia Cache First per asset, Network First per API
+// Fetch: strategia intelligente
 self.addEventListener('fetch', function(event) {
   var request = event.request;
   var url = new URL(request.url);
 
-  // Ignora richieste non GET
   if (request.method !== 'GET') {
     return;
   }
 
-  // Ignora protocolli non http(s)
   if (!url.protocol.startsWith('http')) {
     return;
   }
 
-  // Per risorse esterne (CDN, API): Network First con fallback cache
   if (url.hostname !== self.location.hostname) {
     if (isExternalAPI(url)) {
       event.respondWith(networkFirst(request));
@@ -88,8 +105,11 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Per asset statici locali: Cache First
-  event.respondWith(cacheFirst(request));
+  if (isNetworkFirst(url)) {
+    event.respondWith(networkFirst(request));
+  } else {
+    event.respondWith(cacheFirst(request));
+  }
 });
 
 function isExternalAPI(url) {
@@ -123,11 +143,9 @@ function cacheFirst(request) {
           return networkResponse;
         })
         .catch(function() {
-          // Se e una navigazione HTML, mostra offline.html
           if (request.mode === 'navigate' || request.headers.get('accept').indexOf('text/html') !== -1) {
             return caches.match('./offline.html');
           }
-          // Altrimenti errore
           return new Response('Offline', {
             status: 503,
             statusText: 'Service Unavailable',
@@ -150,7 +168,20 @@ function networkFirst(request) {
       return networkResponse;
     })
     .catch(function() {
-      return caches.match(request);
+      return caches.match(request)
+        .then(function(cachedResponse) {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          if (request.mode === 'navigate' || request.headers.get('accept').indexOf('text/html') !== -1) {
+            return caches.match('./offline.html');
+          }
+          return new Response('Offline', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain' }
+          });
+        });
     });
 }
 
