@@ -34,7 +34,7 @@
 <link rel="apple-touch-startup-image" href="./icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
 
 <title>ScanEan - Gestione Dispensa</title>
-<link rel="stylesheet" href="./style.css?v=1.2">
+<link rel="stylesheet" href="./style.css">
 <style>
 /* Stili aggiuntivi per ricette TheMealDB */
 .recipe-img-thumb {
@@ -350,7 +350,78 @@
   font-weight: 600;
 }
 
-
+/* ===== PWA INSTALL BANNER ===== */
+.pwa-install-banner {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  width: calc(100% - 32px);
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(59,176,149,0.1);
+}
+.pwa-install-banner.show {
+  transform: translateX(-50%) translateY(0);
+}
+.pwa-install-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.pwa-install-text {
+  flex: 1;
+}
+.pwa-install-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.pwa-install-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.pwa-install-btn {
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.pwa-install-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
 
 /* Extra padding per schermata lista spesa */
 #screen-list {
@@ -358,6 +429,61 @@
 }</style>
 </head>
 <body>
+
+<!-- Version & SW Auto-Update -->
+<script>
+(function() {
+  'use strict';
+  var build = '';
+  fetch('./version.json?v=' + Date.now())
+    .then(function(r) { return r.json(); })
+    .then(function(v) {
+      build = v.build;
+      // Cache-busting manifest
+      var m = document.querySelector('link[rel="manifest"]');
+      if (m) m.href = './manifest.json?v=' + build;
+      // Registra SW con cache-busting: QUESTO è il trucco chiave
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js?v=' + build)
+          .then(function(reg) {
+            console.log('[PWA] SW registrato build', build);
+            // Rileva nuova versione e forza aggiornamento
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              newWorker.addEventListener('statechange', function() {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  if (confirm('Nuova versione di ScanEan disponibile. Aggiornare ora?')) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch(function(err) {
+            console.error('[PWA] SW registration failed:', err);
+          });
+      }
+    })
+    .catch(function(err) {
+      console.error('[PWA] Version check failed:', err);
+      // Fallback registrazione base
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(function(){});
+      }
+    });
+
+  // Controllo periodico aggiornamenti ogni 5 minuti
+  if ('serviceWorker' in navigator) {
+    setTimeout(function() {
+      navigator.serviceWorker.ready.then(function(reg) { reg.update(); });
+    }, 10000);
+    setInterval(function() {
+      navigator.serviceWorker.ready.then(function(reg) { reg.update(); });
+    }, 5 * 60 * 1000);
+  }
+})();
+</script>
 
 <div class="app-frame">
 
@@ -745,16 +871,9 @@
       </div>
     </div>
   </div>
-  <!-- PWA INSTALL BANNER -->
-  <div class="toast-banner" id="toast-banner">
-    <div class="toast-banner-icon">📦</div>
-    <div class="toast-banner-text">
-      <div class="toast-banner-title">Installa ScanEan</div>
-      <div class="toast-banner-desc">Aggiungi alla schermata home</div>
-    </div>
-    <button class="toast-banner-btn" id="toast-banner-btn">Installa</button>
-    <button class="toast-banner-close" id="toast-banner-close">&times;</button>
-  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
 
   <!-- OVERLAY CAMERA PER FOTO DATA SCADENZA -->
   <div class="expiry-camera-overlay" id="expiry-camera-overlay">
@@ -783,231 +902,24 @@
 </div>
 
 <!-- MODULI JS -->
-<script src="./storage.js?v=1.0"></script>
-<script src="./openfoodfacts.js?v=1.0"></script>
-<script src="./recipes-api.js?v=1.0"></script>
-<script src="./camera.js?v=1.0"></script>
-<script src="./barcode-scanner.js?v=1.0"></script>
-<script src="./app.js?v=1.0"></script>
-<button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
+<script src="./storage.js"></script>
+<script src="./openfoodfacts.js"></script>
+<script src="./recipes-api.js"></script>
+<script src="./camera.js"></script>
+<script src="./barcode-scanner.js"></script>
+<script src="./app.js"></script>
+
+
+  <!-- PWA Install Banner -->
+  <div class="pwa-install-banner" id="pwa-install-banner">
+    <div class="pwa-install-icon">📦</div>
+    <div class="pwa-install-text">
+      <div class="pwa-install-title">Installa ScanEan</div>
+      <div class="pwa-install-desc">Aggiungi alla schermata home per un accesso rapido</div>
+    </div>
+    <button class="pwa-install-btn" id="pwa-install-btn">Installa</button>
     <button class="pwa-install-close" id="pwa-install-close">&times;</button>
   </div>
-
-  <!-- Service Worker Registration + PWA Install Logic -->
-  <script>
-  (function() {
-    'use strict';
-
-    // Registra Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('./sw.js')
-          .then(function(registration) {
-            console.log('[PWA] SW registrato:', registration.scope);
-          })
-          .catch(function(error) {
-            console.log('[PWA] SW fallito:', error);
-          });
-      });
-    }
-
-    // Gestione installazione PWA
-    var deferredPrompt = null;
-    var banner = document.getElementById('toast-banner');
-    var installBtn = document.getElementById('toast-banner-btn');
-    var closeBtn = document.getElementById('toast-banner-close');
-
-    function isStandalone() {
-      return window.matchMedia('(display-mode: standalone)').matches ||
-             window.navigator.standalone === true;
-    }
-
-    // Nascondi banner se gia installata
-    if (isStandalone()) {
-      if (banner) banner.style.display = 'none';
-    }
-
-    // Cattura evento beforeinstallprompt
-    window.addEventListener('beforeinstallprompt', function(e) {
-      e.preventDefault();
-      deferredPrompt = e;
-      console.log('[PWA] beforeinstallprompt catturato');
-
-      setTimeout(function() {
-        if (banner && !isStandalone()) {
-          banner.classList.add('show');
-        }
-      }, 2000);
-    });
-
-    // Click su Installa
-    if (installBtn) {
-      installBtn.addEventListener('click', function() {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          deferredPrompt.userChoice.then(function(choiceResult) {
-            if (choiceResult.outcome === 'accepted') {
-              console.log('[PWA] Utente ha accettato installazione');
-            }
-            deferredPrompt = null;
-            if (banner) banner.classList.remove('show');
-          });
-        }
-      });
-    }
-
-    // Click su Chiudi
-    if (closeBtn) {
-      closeBtn.addEventListener('click', function() {
-        if (banner) banner.classList.remove('show');
-        try { localStorage.setItem('scanean_install_dismissed', '1'); } catch(e) {}
-      });
-    }
-
-    // Nascondi banner se gia scartato
-    try {
-      if (localStorage.getItem('scanean_install_dismissed') === '1' && banner) {
-        banner.style.display = 'none';
-      }
-    } catch(e) {}
-
-    // App installata
-    window.addEventListener('appinstalled', function() {
-      console.log('[PWA] App installata!');
-      if (banner) {
-        banner.classList.remove('show');
-        banner.style.display = 'none';
-      }
-      deferredPrompt = null;
-    });
-
-    // ===== SWIPE A DESTRA PER CHIUDERE =====
-    (function() {
-      if (!banner) return;
-      var startX = 0, currentX = 0, isDragging = false;
-      var threshold = 100; // px da swipe per chiudere
-
-      banner.addEventListener('touchstart', function(e) {
-        startX = e.touches[0].clientX;
-        isDragging = true;
-        banner.classList.add('swiping');
-      }, { passive: true });
-
-      banner.addEventListener('touchmove', function(e) {
-        if (!isDragging) return;
-        currentX = e.touches[0].clientX;
-        var deltaX = currentX - startX;
-        if (deltaX > 0) {
-          banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
-        }
-      }, { passive: true });
-
-      banner.addEventListener('touchend', function(e) {
-        isDragging = false;
-        banner.classList.remove('swiping');
-        var deltaX = currentX - startX;
-        if (deltaX > threshold) {
-          // Swipe sufficiente -> chiudi
-          banner.style.transform = 'translateX(120%) translateY(0)';
-          setTimeout(function() {
-            banner.classList.remove('show');
-            banner.style.transform = '';
-            try { localStorage.setItem('scanean_install_dismissed', '1'); } catch(e) {}
-          }, 300);
-        } else {
-          // Swipe insufficiente -> torna indietro
-          banner.style.transform = '';
-        }
-        startX = 0; currentX = 0;
-      });
-
-      // Supporto mouse per desktop
-      banner.addEventListener('mousedown', function(e) {
-        startX = e.clientX;
-        isDragging = true;
-        banner.classList.add('swiping');
-      });
-
-      banner.addEventListener('mousemove', function(e) {
-        if (!isDragging) return;
-        currentX = e.clientX;
-        var deltaX = currentX - startX;
-        if (deltaX > 0) {
-          banner.style.transform = 'translateX(calc(-50% + ' + deltaX + 'px)) translateY(0)';
-        }
-      });
-
-      banner.addEventListener('mouseup', function(e) {
-        isDragging = false;
-        banner.classList.remove('swiping');
-        var deltaX = currentX - startX;
-        if (deltaX > threshold) {
-          banner.style.transform = 'translateX(120%) translateY(0)';
-          setTimeout(function() {
-            banner.classList.remove('show');
-            banner.style.transform = '';
-            try { localStorage.setItem('scanean_install_dismissed', '1'); } catch(e) {}
-          }, 300);
-        } else {
-          banner.style.transform = '';
-        }
-        startX = 0; currentX = 0;
-      });
-
-      banner.addEventListener('mouseleave', function(e) {
-        if (isDragging) {
-          isDragging = false;
-          banner.classList.remove('swiping');
-          banner.style.transform = '';
-          startX = 0; currentX = 0;
-        }
-      });
-    })();
-
-  })();
-  </script>
-
-<!-- SW Periodic Update Check -->
-<script>
-(function() {
-  'use strict';
-
-  if (!('serviceWorker' in navigator)) return;
-
-  // Controlla ogni 5 minuti se c'e un nuovo Service Worker
-  var CHECK_INTERVAL = 5 * 60 * 1000; // 5 minuti
-  var isChecking = false;
-
-  function checkForUpdate() {
-    if (isChecking) return;
-    isChecking = true;
-
-    navigator.serviceWorker.ready.then(function(registration) {
-      // Forza il controllo aggiornamenti dal server (bypass cache)
-      registration.update().then(function() {
-        console.log('[PWA] Controllo aggiornamenti completato');
-      }).catch(function(err) {
-        console.log('[PWA] Controllo aggiornamenti fallito:', err);
-      }).finally(function() {
-        isChecking = false;
-      });
-    });
-  }
-
-  // Primo controllo dopo 10 secondi dall'avvio
-  setTimeout(checkForUpdate, 10000);
-
-  // Controllo periodico ogni 5 minuti
-  setInterval(checkForUpdate, CHECK_INTERVAL);
-
-  // Quando il browser trova un nuovo SW in attesa, NON mostrare toast
-  // L'update verra applicato automaticamente al prossimo avvio dell'app
-  navigator.serviceWorker.addEventListener('controllerchange', function() {
-    console.log('[PWA] Nuovo Service Worker attivato al prossimo avvio');
-  });
-
-})();
-</script>
 
 </body>
 </html>
