@@ -1406,11 +1406,162 @@ function addListItem() {
   var input = document.getElementById('newItemInput');
   var name = input.value.trim();
   if (!name) return;
-  shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente', imageUrl: null, emoji: '&#128722;' });
+
+  // Nascondi suggerimenti
+  var suggestions = document.getElementById('shopping-suggestions');
+  if (suggestions) suggestions.style.display = 'none';
+
+  // Trova emoji intelligente
+  var emoji = getEmojiForProduct(name);
+
+  // Cerca se esiste un prodotto simile nella dispensa per prendere l'immagine
+  var imageUrl = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].name.toLowerCase() === name.toLowerCase()) {
+      imageUrl = products[i].imageUrl || null;
+      if (products[i].emoji) emoji = products[i].emoji;
+      break;
+    }
+  }
+
+  shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente', imageUrl: imageUrl, emoji: emoji });
   input.value = '';
+
+  // Reset emoji preview
+  var preview = document.getElementById('shopping-emoji-preview');
+  if (preview) preview.innerHTML = '&#128722;';
+
   Storage.saveShoppingList(shoppingList);
   renderShoppingList();
   showToast('&#9989; ' + name + ' aggiunto');
+}
+
+
+/**
+ * Dizionario parole chiave → emoji per lista spesa
+ */
+var shoppingEmojiMap = {
+  'pane': '&#127838;', 'bread': '&#127838;', 'brioche': '&#127838;', 'croissant': '&#127838;',
+  'latte': '&#129371;', 'milk': '&#129371;', 'yogurt': '&#129371;', 'formaggio': '&#129472;', 'cheese': '&#129472;', 'burro': '&#129371;', 'butter': '&#129371;',
+  'carne': '&#129385;', 'meat': '&#129385;', 'pollo': '&#129385;', 'chicken': '&#129385;', 'manzo': '&#129385;', 'beef': '&#129385;', 'maiale': '&#129385;', 'pork': '&#129385;', 'prosciutto': '&#129385;', 'ham': '&#129385;', 'salsiccia': '&#129385;', 'salame': '&#129385;',
+  'pesce': '&#128031;', 'fish': '&#128031;', 'salmone': '&#128031;', 'tonno': '&#128031;', 'gamberi': '&#129424;', 'shrimp': '&#129424;',
+  'pomodoro': '&#127813;', 'tomato': '&#127813;', 'salsa': '&#127813;', 'passata': '&#127813;', 'sugo': '&#127813;',
+  'insalata': '&#129388;', 'lettuce': '&#129388;', 'verdura': '&#129388;', 'vegetable': '&#129388;', 'spinaci': '&#129388;', 'spinach': '&#129388;', 'zucchina': '&#129388;', 'zucchini': '&#129388;', 'melanzana': '&#129388;', 'eggplant': '&#129388;', 'peperone': '&#129388;', 'pepper': '&#129388;', 'carota': '&#129388;', 'carrot': '&#129388;', 'patata': '&#129388;', 'potato': '&#129388;', 'cipolla': '&#129388;', 'onion': '&#129388;', 'aglio': '&#129388;', 'garlic': '&#129388;',
+  'frutta': '&#127815;', 'fruit': '&#127815;', 'mela': '&#127823;', 'apple': '&#127823;', 'banana': '&#127820;', 'arancia': '&#127818;', 'orange': '&#127818;', 'limone': '&#127819;', 'lemon': '&#127819;', 'fragola': '&#127827;', 'strawberry': '&#127827;', 'uva': '&#127815;', 'grape': '&#127815;', 'pera': '&#127824;', 'pear': '&#127824;', 'pesca': '&#127825;', 'peach': '&#127825;', 'anguria': '&#127817;', 'watermelon': '&#127817;',
+  'pasta': '&#127837;', 'spaghetti': '&#127837;', 'riso': '&#127834;', 'rice': '&#127834;', 'noodle': '&#127836;', 'noodles': '&#127836;',
+  'uovo': '&#129370;', 'egg': '&#129370;', 'uova': '&#129370;',
+  'olio': '&#129477;', 'oil': '&#129477;', 'aceto': '&#129477;', 'vinegar': '&#129477;',
+  'sale': '&#129474;', 'salt': '&#129474;', 'pepe': '&#129474;', 'spezie': '&#129474;', 'spices': '&#129474;', 'zucchero': '&#127852;', 'sugar': '&#127852;', 'farina': '&#129374;', 'flour': '&#129374;',
+  'acqua': '&#128167;', 'water': '&#128167;', 'vino': '&#127863;', 'wine': '&#127863;', 'birra': '&#127866;', 'beer': '&#127866;', 'succo': '&#129371;', 'juice': '&#129371;', 'caffe': '&#9749;', 'coffee': '&#9749;', 'te': '&#127812;', 'tea': '&#127812;',
+  'cioccolato': '&#127851;', 'chocolate': '&#127851;', 'dolce': '&#127856;', 'sweet': '&#127856;', 'torta': '&#127856;', 'cake': '&#127856;', 'gelato': '&#127846;', 'ice cream': '&#127846;',
+  'biscotto': '&#127850;', 'cookie': '&#127850;', 'cracker': '&#127850;',
+  'miele': '&#127855;', 'honey': '&#127855;',
+  'nutella': '&#127852;', 'marmellata': '&#127852;', 'jam': '&#127852;',
+  'pizza': '&#127829;', 'hamburger': '&#127828;', 'hot dog': '&#127789;',
+  'patatine': '&#127839;', 'chips': '&#127839;', 'popcorn': '&#127871;',
+  'surgelato': '&#129482;', 'frozen': '&#129482;', 'ghiaccio': '&#129482;', 'ice': '&#129482;',
+  'toast': '&#127838;', 'fette biscottate': '&#127838;',
+  'cereali': '&#127859;', 'cereal': '&#127859;', 'muesli': '&#127859;', 'avena': '&#127859;', 'oat': '&#127859;',
+  'legumi': '&#129388;', 'beans': '&#129388;', 'lenticchie': '&#129388;', 'lentils': '&#129388;', 'ceci': '&#129388;', 'chickpeas': '&#129388;',
+  'fungo': '&#127812;', 'mushroom': '&#127812;',
+  'avocado': '&#129361;', 'cocco': '&#129381;', 'coconut': '&#129381;',
+  'ananas': '&#127821;', 'pineapple': '&#127821;',
+  'ciliegia': '&#127826;', 'cherry': '&#127826;',
+  'prugna': '&#127814;', 'plum': '&#127814;',
+  'kiwi': '&#129373;', 'mango': '&#129389;',
+  'pomodori': '&#127813;', 'passata pomodoro': '&#127813;',
+  'salsa pomodoro': '&#127813;', 'concentrato': '&#127813;'
+};
+
+/**
+ * Trova l'emoji migliore in base al nome del prodotto
+ */
+function getEmojiForProduct(name) {
+  if (!name) return '&#128722;';
+  var lower = name.toLowerCase();
+  for (var key in shoppingEmojiMap) {
+    if (lower.indexOf(key) !== -1) {
+      return shoppingEmojiMap[key];
+    }
+  }
+  return '&#128722;';
+}
+
+/**
+ * Cerca prodotti simili nella dispensa
+ */
+function findSimilarPantryProducts(searchTerm) {
+  if (!searchTerm || searchTerm.length < 2) return [];
+  var lower = searchTerm.toLowerCase();
+  var results = [];
+  for (var i = 0; i < products.length; i++) {
+    var p = products[i];
+    if (p.name.toLowerCase().indexOf(lower) !== -1) {
+      results.push(p);
+      if (results.length >= 5) break;
+    }
+  }
+  return results;
+}
+
+/**
+ * Mostra suggerimenti autocomplete nella lista spesa
+ */
+function showShoppingSuggestions(results) {
+  var container = document.getElementById('shopping-suggestions');
+  if (!container) return;
+
+  if (results.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < results.length; i++) {
+    var p = results[i];
+    var imgHtml = p.imageUrl ? '<img src="' + p.imageUrl + '" alt="">' : (p.emoji || '&#128230;');
+    html += '<div class="shopping-suggestion-item" onclick="selectShoppingSuggestion(' + p.id + ')">' +
+      '<div class="shopping-suggestion-img">' + imgHtml + '</div>' +
+      '<span>' + p.name + '</span>' +
+    '</div>';
+  }
+  container.innerHTML = html;
+  container.style.display = 'block';
+}
+
+/**
+ * Seleziona un prodotto dai suggerimenti
+ */
+function selectShoppingSuggestion(productId) {
+  var p = null;
+  for (var i = 0; i < products.length; i++) {
+    if (products[i].id === productId) { p = products[i]; break; }
+  }
+  if (!p) return;
+
+  var input = document.getElementById('newItemInput');
+  input.value = p.name;
+
+  var container = document.getElementById('shopping-suggestions');
+  if (container) container.style.display = 'none';
+}
+
+/**
+ * Gestisce l'input nella lista spesa (autocomplete + emoji preview)
+ */
+function handleShoppingInput() {
+  var input = document.getElementById('newItemInput');
+  var value = input.value.trim();
+
+  // Cerca prodotti simili nella dispensa
+  var similar = findSimilarPantryProducts(value);
+  showShoppingSuggestions(similar);
+
+  // Aggiorna emoji preview
+  var preview = document.getElementById('shopping-emoji-preview');
+  if (preview) {
+    preview.innerHTML = getEmojiForProduct(value);
+  }
 }
 
 // ============================================================

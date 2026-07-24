@@ -1635,3 +1635,83 @@ body {
 #shopping-complete-modal .modal-content {
   animation: fadeInUp 0.4s ease-out;
 }
+
+
+/* ===== INPUT LISTA SPESA CON AUTOCOMPLETE ===== */
+.shopping-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+/* Emoji preview accanto all'input */
+.shopping-emoji-preview {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 24px;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: all 0.2s;
+}
+
+/* Dropdown suggerimenti */
+.shopping-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  border: 1px solid rgba(59,176,149,0.1);
+  z-index: 50;
+  display: none;
+  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.shopping-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(59,176,149,0.06);
+}
+.shopping-suggestion-item:last-child {
+  border-bottom: none;
+}
+.shopping-suggestion-item:hover,
+.shopping-suggestion-item:active {
+  background: rgba(59,176,149,0.08);
+}
+
+.shopping-suggestion-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.shopping-suggestion-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shopping-suggestion-item span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

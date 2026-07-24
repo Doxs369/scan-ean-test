@@ -641,7 +641,11 @@
     <div class="list-desc">Prodotti aggiunti automaticamente quando scadono o vengono consumati.</div>
 
     <div class="add-item-bar">
-      <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off">
+      <div class="shopping-input-wrapper">
+        <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off" oninput="handleShoppingInput()" onkeydown="if(event.key==='Enter'){addListItem();}">
+        <div class="shopping-emoji-preview" id="shopping-emoji-preview">&#128722;</div>
+        <div class="shopping-suggestions" id="shopping-suggestions"></div>
+      </div>
       <button class="add-item-btn" onclick="addListItem()">+</button>
     </div>
 
