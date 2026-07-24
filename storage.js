@@ -269,32 +269,6 @@ var Storage = (function() {
     }
   }
 
-  /**
-   * Salva le categorie custom
-   */
-  function saveCustomCategories(categories) {
-    try {
-      localStorage.setItem(PREFIX + 'customCategories', JSON.stringify(categories));
-      return true;
-    } catch (e) {
-      console.error('Errore salvataggio categorie custom:', e);
-      return false;
-    }
-  }
-
-  /**
-   * Carica le categorie custom
-   */
-  function loadCustomCategories() {
-    try {
-      var data = localStorage.getItem(PREFIX + 'customCategories');
-      return data ? JSON.parse(data) : {};
-    } catch (e) {
-      console.error('Errore caricamento categorie custom:', e);
-      return {};
-    }
-  }
-
   // API pubblica
   return {
     saveProducts: saveProducts,
@@ -314,8 +288,6 @@ var Storage = (function() {
     saveRecipes: saveRecipes,
     loadRecipes: loadRecipes,
     deleteRecipes: deleteRecipes,
-    cleanupOrphanRecipes: cleanupOrphanRecipes,
-    saveCustomCategories: saveCustomCategories,
-    loadCustomCategories: loadCustomCategories
+    cleanupOrphanRecipes: cleanupOrphanRecipes
   };
 })();

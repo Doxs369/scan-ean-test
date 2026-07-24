@@ -1,2 +1,2 @@
 const APP_VERSION = "";
-const APP_BUILD = "20260724-0754";
+const APP_BUILD = "20260724-0829";
