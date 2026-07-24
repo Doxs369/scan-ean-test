@@ -375,10 +375,24 @@ function showManualBarcodeAndPhotoInput() {
   document.getElementById('scanner-hint').innerHTML =
     'Inserisci il codice manualmente o scatta una foto';
 
-  var manualDiv = document.getElementById('manual-barcode-overlay');
-  if (manualDiv) {
-    manualDiv.style.display = 'block';
+  var manualDiv = document.getElementById('manual-barcode-input');
+  if (!manualDiv) {
+    manualDiv = document.createElement('div');
+    manualDiv.id = 'manual-barcode-input';
+    manualDiv.className = 'manual-barcode';
+    manualDiv.style.maxWidth = '320px';
+    manualDiv.innerHTML =
+      '<div style="margin-bottom:12px;">' +
+        '<input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13" style="width:100%;margin-bottom:8px;">' +
+        '<button onclick="processManualBarcode()" style="width:100%;">&#128270; Cerca prodotto</button>' +
+      '</div>' +
+      '<div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">' +
+        '<div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:8px;">Oppure scatta una foto del prodotto</div>' +
+        '<button onclick="openCameraForManualProduct()" style="width:100%;background:var(--accent);">&#128247; Scatta foto prodotto</button>' +
+      '</div>';
+    document.querySelector('.scanner-container').appendChild(manualDiv);
   }
+  manualDiv.style.display = 'block';
 }
 
 function showManualBarcodeInput() {
@@ -394,7 +408,7 @@ function processManualBarcode() {
     return;
   }
 
-  var manualDiv = document.getElementById('manual-barcode-overlay');
+  var manualDiv = document.getElementById('manual-barcode-input');
   if (manualDiv) manualDiv.style.display = 'none';
 
   processBarcode(barcode);
@@ -457,7 +471,7 @@ function handleManualProductPhoto(event) {
     btnCamera.style.display = 'none';
 
     // Nascondi input manuale
-    var manualDiv = document.getElementById('manual-barcode-overlay');
+    var manualDiv = document.getElementById('manual-barcode-input');
     if (manualDiv) manualDiv.style.display = 'none';
 
     document.getElementById('scan-result').classList.add('show');
@@ -1809,7 +1823,16 @@ function formatDate(dateStr) {
 
 function showToast(msg) {
   var toast = document.getElementById('toast');
-  toast.innerHTML = msg;
+  var processedMsg = msg;
+  var emojiMatch = msg.match(/^(\s*(&#\d+;|&#x[0-9a-fA-F]+;|[\uD83C-\uDBFF\uDC00-\uDFFF]|[\u2600-\u26FF]|[\u2700-\u27BF]|[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}])\s*)/u);
+  if (emojiMatch) {
+    var emoji = emojiMatch[1];
+    var rest = msg.substring(emojiMatch[0].length);
+    processedMsg = '<span class="toast-emoji">' + emoji + '</span><span class="toast-text">' + rest.trim() + '</span>';
+  } else {
+    processedMsg = '<span class="toast-text">' + msg + '</span>';
+  }
+  toast.innerHTML = processedMsg;
   toast.classList.add('show');
   setTimeout(function() {
     toast.classList.remove('show');
@@ -2012,6 +2035,7 @@ function scanExpiryDate() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showToast('&#10060; Fotocamera non supportata');
     setExpiryButtonLoading(false);
+    statusDiv.style.display = 'none';
     return;
   }
 
@@ -2047,6 +2071,7 @@ function scanExpiryDate() {
     console.error('Errore fotocamera data:', err);
     showToast('&#10060; Errore fotocamera: ' + err.message);
     setExpiryButtonLoading(false);
+    statusDiv.style.display = 'none';
   });
 }
 

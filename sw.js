@@ -3,7 +3,7 @@
  * Caching offline con percorsi relativi per funzionare in qualsiasi cartella
  */
 
-const CACHE_NAME = 'scanean-v4';
+const CACHE_NAME = 'scanean-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
