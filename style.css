@@ -345,6 +345,7 @@ body {
   border-radius: 20px;
   position: relative;
   z-index: 3;
+  margin-top: -40px;
   box-shadow: 0 0 0 4px rgba(59,176,149,0.15), 0 0 40px rgba(59,176,149,0.2);
 }
 .scanner-frame::before, .scanner-frame::after {
@@ -381,7 +382,7 @@ body {
 }
 .scanner-hint {
   position: absolute;
-  bottom: 130px;
+  bottom: 200px;
   z-index: 3;
   color: white;
   font-size: 14px;
@@ -393,7 +394,7 @@ body {
 }
 .scanner-actions {
   position: absolute;
-  bottom: 40px;
+  bottom: 90px;
   z-index: 3;
   display: flex;
   gap: 32px;
@@ -1023,7 +1024,7 @@ body {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 380px) {
-  .scanner-frame { width: 220px; height: 220px; }
+  .scanner-frame { width: 220px; height: 220px; margin-top: -40px; }
   .stat-number { font-size: 22px; }
 }
 
