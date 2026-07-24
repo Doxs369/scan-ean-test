@@ -3,11 +3,11 @@
  * Controllo periodico in background, update silenzioso al prossimo avvio
  */
 
-// ==== CAMBIA QUESTO NUMERO AD OGNI DEPLOY ====
-const APP_VERSION = '1.3';
-// =============================================
+// Versione caricata automaticamente da version.js
+self.importScripts('./version.js');
 
-const CACHE_NAME = 'scanean-v' + APP_VERSION;
+
+const CACHE_NAME = 'scanean-' + APP_BUILD;
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -48,11 +48,11 @@ function isNetworkFirst(url) {
 
 // Installazione: cache degli asset statici
 self.addEventListener('install', function(event) {
-  console.log('[SW] Installazione v' + APP_VERSION + '...');
+  console.log('[SW] Installazione build ' + APP_BUILD + '...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(function(cache) {
-        console.log('[SW] Caching asset statici v' + APP_VERSION);
+        console.log('[SW] Caching asset statici build ' + APP_BUILD);
         return cache.addAll(STATIC_ASSETS);
       })
       .then(function() {
@@ -66,7 +66,7 @@ self.addEventListener('install', function(event) {
 
 // Attivazione: pulizia cache vecchie + claim clients
 self.addEventListener('activate', function(event) {
-  console.log('[SW] Attivazione v' + APP_VERSION + '...');
+  console.log('[SW] Attivazione build ' + APP_BUILD + '...');
   event.waitUntil(
     caches.keys()
       .then(function(cacheNames) {

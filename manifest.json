@@ -1,9 +1,8 @@
 {
   "name": "ScanEan",
   "short_name": "ScanEan",
-  "version": "1.3",
   "description": "App per scansionare prodotti e tenere sotto controllo le scadenze",
-  "start_url": "./index.html?v=1.2",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#32aa8c",
@@ -61,21 +60,35 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["food", "lifestyle", "utilities"],
+  "categories": [
+    "food",
+    "lifestyle",
+    "utilities"
+  ],
   "shortcuts": [
     {
       "name": "Scanner",
       "short_name": "Scanner",
       "description": "Avvia lo scanner barcode",
       "url": "./index.html?action=scan",
-      "icons": [{ "src": "icons/shortcut-scan.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "icons/shortcut-scan.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "Lista spesa",
       "short_name": "Lista",
       "description": "Apri la lista della spesa",
       "url": "./index.html?screen=list",
-      "icons": [{ "src": "icons/shortcut-list.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "icons/shortcut-list.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }
