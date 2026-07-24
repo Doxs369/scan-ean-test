@@ -17,8 +17,6 @@ var settings = {};
 var isScanning = false;
 var scannedProductData = null;
 var currentBarcode = null;
-var currentImageUrl = null;
-var cameraPhotoData = null;
 var currentRecipeProductId = null;
 var dailyRecipes = null;
 var shoppingCompleteShown = false;
@@ -367,13 +365,12 @@ function stopScanner() {
 }
 
 /**
- * NUOVO: Mostra input manuale barcode + foto prodotto
- * Funziona anche se la fotocamera non è disponibile
+ * Mostra input manuale barcode
  */
 function showManualBarcodeAndPhotoInput() {
   document.getElementById('scanner-frame').style.display = 'none';
   document.getElementById('scanner-hint').innerHTML =
-    'Inserisci il codice manualmente o scatta una foto';
+    'Inserisci il codice manualmente';
 
   var manualDiv = document.getElementById('manual-barcode-input');
   if (!manualDiv) {
@@ -385,15 +382,12 @@ function showManualBarcodeAndPhotoInput() {
       '<div style="margin-bottom:12px;">' +
         '<input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13" style="width:100%;margin-bottom:8px;">' +
         '<button onclick="processManualBarcode()" style="width:100%;">&#128270; Cerca prodotto</button>' +
-      '</div>' +
-      '<div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">' +
-        '<div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:8px;">Oppure scatta una foto del prodotto</div>' +
-        '<button onclick="openCameraForManualProduct()" style="width:100%;background:var(--accent);">&#128247; Scatta foto prodotto</button>' +
       '</div>';
     document.querySelector('.scanner-container').appendChild(manualDiv);
   }
   manualDiv.style.display = 'block';
 }
+
 
 function showManualBarcodeInput() {
   showManualBarcodeAndPhotoInput();
@@ -414,80 +408,8 @@ function processManualBarcode() {
   processBarcode(barcode);
 }
 
-/**
- * NUOVO: Apre fotocamera per foto prodotto manuale (senza barcode)
- */
-function openCameraForManualProduct() {
-  // Usa l'input file nascosto ma senza barcode
-  document.getElementById('camera-input-manual').click();
-}
 
-/**
- * NUOVO: Gestisce foto prodotto manuale (senza API)
- */
-function handleManualProductPhoto(event) {
-  var file = event.target.files[0];
-  if (!file) return;
 
-  var processPhoto = function(dataUrl) {
-    cameraPhotoData = dataUrl;
-
-    // Prepara dati prodotto manuale
-    scannedProductData = {
-      name: '',
-      emoji: '&#128230;',
-      category: 'pantry',
-      brand: '',
-      barcode: null
-    };
-    currentBarcode = null;
-    currentImageUrl = null;
-
-    // Mostra risultato
-    var resultImg = document.getElementById('result-img');
-    var resultTitle = document.getElementById('result-title');
-    var resultSub = document.getElementById('result-sub');
-    var nameInput = document.getElementById('product-name-input');
-    var expiryInput = document.getElementById('expiry-input');
-    var qtyInput = document.getElementById('qty-input');
-    var btnCamera = document.getElementById('btn-camera');
-    var cameraPreview = document.getElementById('camera-preview');
-
-    cameraPreview.classList.remove('show');
-    cameraPreview.src = '';
-
-    resultImg.innerHTML = '<img src="' + cameraPhotoData + '" alt="Foto prodotto">';
-    resultTitle.textContent = 'Nuovo prodotto';
-    resultSub.innerHTML = 'Foto manuale &bull; Inserisci i dati';
-
-    nameInput.value = '';
-    nameInput.placeholder = 'Inserisci il nome del prodotto...';
-
-    var expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
-    expiryInput.value = expiry.toISOString().split('T')[0];
-    qtyInput.value = '1';
-
-    btnCamera.style.display = 'none';
-
-    // Nascondi input manuale
-    var manualDiv = document.getElementById('manual-barcode-input');
-    if (manualDiv) manualDiv.style.display = 'none';
-
-    document.getElementById('scan-result').classList.add('show');
-    showToast('&#128247; Foto caricata! Inserisci il nome del prodotto');
-  };
-
-  if (file.size > 500 * 1024) {
-    compressImage(file, 500, processPhoto);
-  } else {
-    var reader = new FileReader();
-    reader.onload = function(e) { processPhoto(e.target.result); };
-    reader.readAsDataURL(file);
-  }
-
-  event.target.value = '';
-}
 
 function onBarcodeDetected(barcode) {
   if (!isScanning) return;
@@ -520,11 +442,11 @@ function showProductFound(product) {
     brand: product.brand, quantity: product.quantity,
     ingredients: product.ingredients, nutriscore: product.nutriscore,
     novaGroup: product.novaGroup, nutriments: product.nutriments,
-    servingSize: product.servingSize, barcode: product.barcode
+    servingSize: product.servingSize, barcode: product.barcode,
+    imageUrl: product.imageUrl || product.imageFrontUrl || null
   };
 
   currentBarcode = product.barcode;
-  currentImageUrl = product.imageUrl || product.imageFrontUrl || null;
 
   var resultImg = document.getElementById('result-img');
   var resultTitle = document.getElementById('result-title');
@@ -532,19 +454,10 @@ function showProductFound(product) {
   var nameInput = document.getElementById('product-name-input');
   var expiryInput = document.getElementById('expiry-input');
   var qtyInput = document.getElementById('qty-input');
-  var btnCamera = document.getElementById('btn-camera');
-  var cameraPreview = document.getElementById('camera-preview');
-
-  cameraPreview.classList.remove('show');
-  cameraPreview.src = '';
-  cameraPhotoData = null;
-
-  if (currentImageUrl) {
-    resultImg.innerHTML = '<img src="' + currentImageUrl + '" alt="' + product.name + '" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=placeholder-text>' + emoji + '</span>\'">';
-    btnCamera.style.display = 'none';
+  if (product.imageUrl || product.imageFrontUrl) {
+    resultImg.innerHTML = '<img src="' + (product.imageUrl || product.imageFrontUrl) + '" alt="' + product.name + '" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=placeholder-text>' + emoji + '</span>\'">';
   } else {
     resultImg.innerHTML = '<span class="placeholder-text">' + emoji + '</span>';
-    btnCamera.style.display = 'block';
   }
 
   resultTitle.textContent = product.name;
@@ -554,6 +467,15 @@ function showProductFound(product) {
   resultSub.innerHTML = subText;
 
   nameInput.value = product.name;
+
+  // Auto-emoji se l'utente modifica il nome e non c'è foto API
+  nameInput.oninput = function() {
+    if (!scannedProductData.imageUrl && !scannedProductData.imageFrontUrl) {
+      var emoji = getEmojiForProduct(nameInput.value);
+      scannedProductData.emoji = emoji;
+      resultImg.innerHTML = '<span class="placeholder-text">' + emoji + '</span>';
+    }
+  };
 
   var expiry = new Date();
   expiry.setDate(expiry.getDate() + 30);
@@ -566,7 +488,6 @@ function showProductFound(product) {
 
 function showProductNotFound(barcode) {
   currentBarcode = barcode;
-  currentImageUrl = null;
 
   scannedProductData = {
     name: 'Prodotto ' + barcode, emoji: '&#128230;',
@@ -579,26 +500,26 @@ function showProductNotFound(barcode) {
   var nameInput = document.getElementById('product-name-input');
   var expiryInput = document.getElementById('expiry-input');
   var qtyInput = document.getElementById('qty-input');
-  var btnCamera = document.getElementById('btn-camera');
-  var cameraPreview = document.getElementById('camera-preview');
-
-  cameraPreview.classList.remove('show');
-  cameraPreview.src = '';
-  cameraPhotoData = null;
 
   resultImg.innerHTML = '<span class="placeholder-text">&#128230;</span>';
   resultTitle.textContent = 'Prodotto non trovato';
-  resultSub.innerHTML = 'EAN: ' + barcode + '<br>Inserisci i dati manualmente o scatta una foto';
+  resultSub.innerHTML = 'EAN: ' + barcode + '<br>Inserisci il nome del prodotto';
 
   nameInput.value = '';
   nameInput.placeholder = 'Inserisci il nome del prodotto...';
+
+  // Auto-emoji: aggiorna mentre l'utente scrive
+  nameInput.oninput = function() {
+    var emoji = getEmojiForProduct(nameInput.value);
+    scannedProductData.emoji = emoji;
+    resultImg.innerHTML = '<span class="placeholder-text">' + emoji + '</span>';
+  };
 
   var expiry = new Date();
   expiry.setDate(expiry.getDate() + 30);
   expiryInput.value = expiry.toISOString().split('T')[0];
   qtyInput.value = '1';
 
-  btnCamera.style.display = 'block';
   document.getElementById('scan-result').classList.add('show');
 }
 
@@ -615,8 +536,6 @@ function closeScanResult() {
   document.getElementById('scan-result').classList.remove('show');
   scannedProductData = null;
   currentBarcode = null;
-  currentImageUrl = null;
-  cameraPhotoData = null;
 
   if (isScanning && document.getElementById('screen-scanner').classList.contains('active')) {
     BarcodeScanner.start();
@@ -626,58 +545,9 @@ function closeScanResult() {
 // ============================================================
 // FOTO CAMERA
 // ============================================================
-function openCamera() {
-  document.getElementById('camera-input').click();
-}
 
-function handleCameraPhoto(event) {
-  var file = event.target.files[0];
-  if (!file) return;
 
-  var processPhoto = function(dataUrl) {
-    cameraPhotoData = dataUrl;
-    var preview = document.getElementById('camera-preview');
-    preview.src = cameraPhotoData;
-    preview.classList.add('show');
-    var resultImg = document.getElementById('result-img');
-    resultImg.innerHTML = '<img src="' + cameraPhotoData + '" alt="Foto prodotto">';
-    showToast('&#128247; Foto aggiunta!');
-  };
 
-  if (file.size > 500 * 1024) {
-    compressImage(file, 500, processPhoto);
-  } else {
-    var reader = new FileReader();
-    reader.onload = function(e) { processPhoto(e.target.result); };
-    reader.readAsDataURL(file);
-  }
-
-  event.target.value = '';
-}
-
-function compressImage(file, maxKB, callback) {
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var ctx = canvas.getContext('2d');
-      var scale = Math.min(1, 400 / img.width);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      var quality = 0.7;
-      var dataUrl;
-      do {
-        dataUrl = canvas.toDataURL('image/jpeg', quality);
-        quality -= 0.1;
-      } while (dataUrl.length > maxKB * 1024 * 1.37 && quality > 0.2);
-      callback(dataUrl);
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
 
 // ============================================================
 // AGGIUNGI PRODOTTO
@@ -694,8 +564,6 @@ function addProduct() {
     return;
   }
 
-  var finalImageUrl = cameraPhotoData || currentImageUrl || null;
-
   var newProduct = {
     id: nextId++,
     name: name,
@@ -704,7 +572,7 @@ function addProduct() {
     expiryDate: expiry,
     qty: qty,
     barcode: currentBarcode,
-    imageUrl: finalImageUrl,
+    imageUrl: scannedProductData.imageUrl || null,
     addedAt: new Date().toISOString().split('T')[0],
     brand: scannedProductData.brand || '',
     ingredients: scannedProductData.ingredients || '',
@@ -1427,11 +1295,9 @@ function addListItem() {
   shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente', imageUrl: imageUrl, emoji: emoji });
   input.value = '';
 
-  // Reset emoji preview (entrambe)
-  var previewDesktop = document.getElementById('shopping-emoji-preview');
-  var previewMobile = document.getElementById('shopping-emoji-preview-mobile');
-  if (previewDesktop) previewDesktop.innerHTML = '&#128722;';
-  if (previewMobile) previewMobile.innerHTML = '&#128722;';
+  // Reset emoji preview
+  var preview = document.getElementById('shopping-emoji-preview');
+  if (preview) preview.innerHTML = '&#128722;';
 
   Storage.saveShoppingList(shoppingList);
   renderShoppingList();
@@ -1458,8 +1324,8 @@ var shoppingEmojiMap = {
   'maiale': '&#129385;', 'pork': '&#129385;', 'cotoletta': '&#129385;', 'lonza': '&#129385;', 'costoletta': '&#129385;',
   'agnello': '&#129385;', 'lamb': '&#129385;', 'capretto': '&#129385;', 'goat': '&#129385;',
   'prosciutto': '&#129385;', 'ham': '&#129385;', 'speck': '&#129385;', 'bresaola': '&#129385;', 'carpaccio': '&#129385;',
-  'salame': '&#129363;', 'salami': '&#129363;', 'salsiccia': '&#129363;', 'soppressa': '&#129363;', 'nduja': '&#129363;', 'mortadella': '&#129363;', 'bologna': '&#129363;', 'wurstel': '&#129363;', 'frankfurter': '&#129363;', 'hot dog': '&#127789;',
-  'bacon': '&#129363;', 'pancetta': '&#129363;', 'lardo': '&#129363;',
+  'salame': '&#129385;', 'salami': '&#129385;', 'salsiccia': '&#129385;', 'soppressa': '&#129385;', 'nduja': '&#129385;', 'mortadella': '&#129385;', 'bologna': '&#129385;', 'wurstel': '&#129385;', 'frankfurter': '&#129385;', 'hot dog': '&#127789;',
+  'bacon': '&#129385;', 'pancetta': '&#129385;', 'lardo': '&#129385;',
 
   // PESCE
   'pesce': '&#128031;', 'fish': '&#128031;', 'merluzzo': '&#128031;', 'cod': '&#128031;', 'platessa': '&#128031;', 'sogliola': '&#128031;', 'sole': '&#128031;',
@@ -1683,15 +1549,10 @@ function handleShoppingInput() {
   var similar = findSimilarPantryProducts(value);
   showShoppingSuggestions(similar);
 
-  // Aggiorna emoji preview (entrambe: mobile e desktop)
-  var emoji = getEmojiForProduct(value);
-  var previewDesktop = document.getElementById('shopping-emoji-preview');
-  var previewMobile = document.getElementById('shopping-emoji-preview-mobile');
-  if (previewDesktop) {
-    previewDesktop.innerHTML = emoji;
-  }
-  if (previewMobile) {
-    previewMobile.innerHTML = emoji;
+  // Aggiorna emoji preview
+  var preview = document.getElementById('shopping-emoji-preview');
+  if (preview) {
+    preview.innerHTML = getEmojiForProduct(value);
   }
 }
 
