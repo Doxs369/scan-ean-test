@@ -11,7 +11,6 @@ var BarcodeScanner = (function() {
   var canvasContext = null;
   var scanInterval = null;
   var isScanning = false;
-  var scanHandled = false;
   var lastScanTime = 0;
   var scanCooldown = 2000; // ms tra una scansione e l'altra
   var onBarcodeDetected = null;
@@ -109,7 +108,6 @@ var BarcodeScanner = (function() {
    */
   function stopScanning() {
     isScanning = false;
-    scanHandled = false;
 
     if (scanInterval) {
       clearInterval(scanInterval);
@@ -121,8 +119,7 @@ var BarcodeScanner = (function() {
     }
 
     if (quaggaLoaded && typeof Quagga !== 'undefined') {
-      try { Quagga.stop(); } catch(e){}
-      try { Quagga.offDetected(); } catch(e){}
+      Quagga.stop();
     }
   }
 
@@ -155,10 +152,6 @@ var BarcodeScanner = (function() {
   function startQuaggaScan() {
     if (!videoElement) return;
 
-    // Rimuovi listener precedenti e resetta flag
-    scanHandled = false;
-    try { Quagga.offDetected(); } catch(e){}
-
     Quagga.init({
       inputStream: {
         name: 'Live',
@@ -190,16 +183,12 @@ var BarcodeScanner = (function() {
     });
 
     Quagga.onDetected(function(result) {
-      if (!isScanning || scanHandled) return;
+      if (!isScanning) return;
 
       var code = result.codeResult.code;
       var now = Date.now();
       if (now - lastScanTime > scanCooldown) {
         lastScanTime = now;
-        scanHandled = true;
-        // Ferma Quagga immediatamente per evitare loop
-        try { Quagga.stop(); } catch(e){}
-        try { Quagga.offDetected(); } catch(e){}
         if (onBarcodeDetected) {
           onBarcodeDetected(code);
         }

@@ -39,15 +39,6 @@ var categoryNames = {
 // INIT
 // ============================================================
 function init() {
-  // Safety net splash: se ancora visibile dopo 3.5s, nascondilo forzatamente
-  setTimeout(function(){
-    var splash = document.getElementById('splash');
-    if(splash && splash.style.display !== 'none'){
-      splash.classList.add('hidden');
-      splash.style.display = 'none';
-    }
-  }, 3500);
-
   settings = Storage.loadSettings();
 
   var savedProducts = Storage.loadProducts();
@@ -331,13 +322,6 @@ function navigateTo(screen) {
     document.getElementById('nav-' + screen).classList.add('active');
   }
 
-  // Gestione classe scanner-active per nascondere bottom nav
-  var appFrame = document.querySelector('.app-frame');
-  if (appFrame) {
-    if (screen === 'scanner') appFrame.classList.add('scanner-active');
-    else appFrame.classList.remove('scanner-active');
-  }
-
   if (screen === 'list') renderShoppingList();
   else if (screen === 'pantry') {
     renderProducts();
@@ -359,11 +343,7 @@ function startCameraAndScan() {
   document.getElementById('scanner-frame').style.display = 'block';
   document.getElementById('scanner-hint').innerHTML =
     'Inquadra il codice a barre<br>Lo scanner lo rilevera automaticamente';
-  document.getElementById('scanner-hint').style.display = 'block';
   document.getElementById('scanner-actions').style.display = 'flex';
-
-  // Nascondi overlay manuale se era aperto
-  hideManualBarcode();
 
   Camera.start()
     .then(function(info) {
@@ -384,9 +364,6 @@ function stopScanner() {
   BarcodeScanner.stop();
   Camera.stop();
   closeScanResult();
-  hideManualBarcode();
-  var appFrame = document.querySelector('.app-frame');
-  if (appFrame) appFrame.classList.remove('scanner-active');
 }
 
 /**
@@ -394,15 +371,48 @@ function stopScanner() {
  * Funziona anche se la fotocamera non è disponibile
  */
 function showManualBarcodeAndPhotoInput() {
-  // Usa il nuovo overlay DOM statico
-  showManualBarcodeOverlay();
+  document.getElementById('scanner-frame').style.display = 'none';
+  document.getElementById('scanner-hint').innerHTML =
+    'Inserisci il codice manualmente o scatta una foto';
+
+  var manualDiv = document.getElementById('manual-barcode-input');
+  if (!manualDiv) {
+    manualDiv = document.createElement('div');
+    manualDiv.id = 'manual-barcode-input';
+    manualDiv.className = 'manual-barcode';
+    manualDiv.style.maxWidth = '320px';
+    manualDiv.innerHTML =
+      '<div style="margin-bottom:12px;">' +
+        '<input type="text" id="manual-ean" placeholder="Codice EAN-13" maxlength="13" style="width:100%;margin-bottom:8px;">' +
+        '<button onclick="processManualBarcode()" style="width:100%;">&#128270; Cerca prodotto</button>' +
+      '</div>' +
+      '<div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">' +
+        '<div style="color:rgba(255,255,255,0.7);font-size:12px;margin-bottom:8px;">Oppure scatta una foto del prodotto</div>' +
+        '<button onclick="openCameraForManualProduct()" style="width:100%;background:var(--accent);">&#128247; Scatta foto prodotto</button>' +
+      '</div>';
+    document.querySelector('.scanner-container').appendChild(manualDiv);
+  }
+  manualDiv.style.display = 'block';
 }
 
 function showManualBarcodeInput() {
   showManualBarcodeAndPhotoInput();
 }
 
+function processManualBarcode() {
+  var input = document.getElementById('manual-ean');
+  var barcode = input ? input.value.trim() : '';
 
+  if (!barcode || barcode.length < 8) {
+    showToast('Inserisci un codice valido');
+    return;
+  }
+
+  var manualDiv = document.getElementById('manual-barcode-input');
+  if (manualDiv) manualDiv.style.display = 'none';
+
+  processBarcode(barcode);
+}
 
 /**
  * NUOVO: Apre fotocamera per foto prodotto manuale (senza barcode)
@@ -483,7 +493,6 @@ function onBarcodeDetected(barcode) {
   if (!isScanning) return;
   console.log('Barcode rilevato:', barcode);
   showToast('Barcode rilevato: ' + barcode);
-  isScanning = false; // blocca immediatamente
   BarcodeScanner.stop();
   processBarcode(barcode);
 }
@@ -612,58 +621,6 @@ function closeScanResult() {
   if (isScanning && document.getElementById('screen-scanner').classList.contains('active')) {
     BarcodeScanner.start();
   }
-}
-
-
-/**
- * NUOVO: Mostra overlay input manuale EAN
- */
-function showManualBarcodeOverlay() {
-  var overlay = document.getElementById('manual-barcode-overlay');
-  if (overlay) {
-    overlay.style.display = 'block';
-    var input = document.getElementById('manual-ean-input');
-    if (input) {
-      input.value = '';
-      setTimeout(function(){ input.focus(); }, 100);
-    }
-  }
-  // Nascondi elementi scanner
-  var frame = document.getElementById('scanner-frame');
-  var hint = document.getElementById('scanner-hint');
-  var actions = document.getElementById('scanner-actions');
-  if (frame) frame.style.display = 'none';
-  if (hint) hint.style.display = 'none';
-  if (actions) actions.style.display = 'none';
-}
-
-/**
- * NUOVO: Nascondi overlay input manuale EAN
- */
-function hideManualBarcode() {
-  var overlay = document.getElementById('manual-barcode-overlay');
-  if (overlay) overlay.style.display = 'none';
-  // Ripristina elementi scanner
-  var frame = document.getElementById('scanner-frame');
-  var hint = document.getElementById('scanner-hint');
-  var actions = document.getElementById('scanner-actions');
-  if (frame) frame.style.display = 'block';
-  if (hint) hint.style.display = 'block';
-  if (actions) actions.style.display = 'flex';
-}
-
-/**
- * NUOVO: Processa barcode inserito manualmente
- */
-function processManualBarcode() {
-  var input = document.getElementById('manual-ean-input');
-  var barcode = input ? input.value.trim() : '';
-  if (!barcode || barcode.length < 8) {
-    showToast('Inserisci un codice valido (min 8 cifre)');
-    return;
-  }
-  hideManualBarcode();
-  processBarcode(barcode);
 }
 
 // ============================================================
@@ -1893,8 +1850,18 @@ function toggleTorch() {
 }
 
 function captureBarcode() {
-  // Mostra direttamente l'input manuale EAN (più affidabile del frame capture)
-  showManualBarcodeOverlay();
+  var frameData = BarcodeScanner.scanFrame();
+  if (frameData) {
+    showToast('&#128247; Frame catturato, analisi...');
+    // Prova a decodificare il frame con ZXing se disponibile
+    if (BarcodeScanner.isReady()) {
+      showToast('&#128270; Scansione in corso...');
+    } else {
+      showManualBarcodeAndPhotoInput();
+    }
+  } else {
+    showManualBarcodeAndPhotoInput();
+  }
 }
 // ============================================================
 // RILEVAMENTO DATA SCADENZA - SISTEMA FOTO SINGOLA
