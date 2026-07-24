@@ -4,7 +4,7 @@
  */
 
 // ==== CAMBIA QUESTO NUMERO AD OGNI DEPLOY ====
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 // =============================================
 
 const CACHE_NAME = 'scanean-v' + APP_VERSION;
