@@ -1,2 +1,2 @@
-const APP_VERSION = "1.0.4";
-const APP_BUILD = "20260724-1539";
+const APP_VERSION = "";
+const APP_BUILD = "20260724-1306";

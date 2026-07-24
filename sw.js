@@ -4,12 +4,11 @@
  */
 
 // Versione caricata automaticamente da version.js
-self.importScripts('./version.js?v=' + Date.now());
+self.importScripts('./version.js');
 
 
 const CACHE_NAME = 'scanean-' + APP_BUILD;
 const STATIC_ASSETS = [
-  './version.js',
   './',
   './index.html',
   './offline.html',
