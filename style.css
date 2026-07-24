@@ -399,7 +399,9 @@ body {
 }
 .scanner-hint {
   position: absolute;
-  bottom: calc(40px + 72px + 3mm);
+  top: calc(50% + 110px + 3mm + 72px + 2mm);
+  left: 0;
+  right: 0;
   z-index: 3;
   color: white;
   font-size: 14px;
@@ -408,14 +410,19 @@ body {
   text-shadow: 0 2px 8px rgba(0,0,0,0.8);
   padding: 0 40px;
   line-height: 1.5;
+  bottom: auto;
 }
 .scanner-actions {
   position: absolute;
-  bottom: 40px;
+  top: calc(50% + 110px + 3mm);
+  left: 0;
+  right: 0;
   z-index: 3;
   display: flex;
   gap: 32px;
   align-items: center;
+  justify-content: center;
+  bottom: auto;
 }
 .scan-btn {
   width: 72px;
@@ -828,7 +835,7 @@ body {
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(2mm);
   width: 100%;
   max-width: 420px;
   background: var(--surface);
@@ -841,7 +848,7 @@ body {
   border-top: 1px solid rgba(59,176,149,0.06);
 }
 .bottom-nav.has-safe-area {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 2mm);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-item {
   display: flex;
