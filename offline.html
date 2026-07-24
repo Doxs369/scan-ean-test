@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#32aa8c">
+<title>ScanEan - Offline</title>
+<style>
+:root { --primary: #32aa8c; --bg: #F5F9F7; --text: #1A2E28; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+  padding: 20px;
+}
+.icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+  opacity: 0.7;
+}
+h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+p { font-size: 15px; color: #5A7A70; margin-bottom: 24px; line-height: 1.5; }
+.btn {
+  padding: 14px 28px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--primary), #2A8A72);
+  color: white;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+<div class="icon">📡</div>
+<h1>Sei offline</h1>
+<p>Sembra che tu non abbia una connessione internet.<br>ScanEan funziona offline, ma alcune funzionalità potrebbero essere limitate.</p>
+<a href="./index.html" class="btn">Torna alla dispensa</a>
+</body>
+</html>
