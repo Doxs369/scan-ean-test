@@ -1456,8 +1456,8 @@ var shoppingEmojiMap = {
   'maiale': '&#129385;', 'pork': '&#129385;', 'cotoletta': '&#129385;', 'lonza': '&#129385;', 'costoletta': '&#129385;',
   'agnello': '&#129385;', 'lamb': '&#129385;', 'capretto': '&#129385;', 'goat': '&#129385;',
   'prosciutto': '&#129385;', 'ham': '&#129385;', 'speck': '&#129385;', 'bresaola': '&#129385;', 'carpaccio': '&#129385;',
-  'salame': '&#129385;', 'salami': '&#129385;', 'salsiccia': '&#129385;', 'soppressa': '&#129385;', 'nduja': '&#129385;', 'mortadella': '&#129385;', 'bologna': '&#129385;', 'wurstel': '&#129385;', 'frankfurter': '&#129385;', 'hot dog': '&#127789;',
-  'bacon': '&#129385;', 'pancetta': '&#129385;', 'lardo': '&#129385;',
+  'salame': '&#129363;', 'salami': '&#129363;', 'salsiccia': '&#129363;', 'soppressa': '&#129363;', 'nduja': '&#129363;', 'mortadella': '&#129363;', 'bologna': '&#129363;', 'wurstel': '&#129363;', 'frankfurter': '&#129363;', 'hot dog': '&#127789;',
+  'bacon': '&#129363;', 'pancetta': '&#129363;', 'lardo': '&#129363;',
 
   // PESCE
   'pesce': '&#128031;', 'fish': '&#128031;', 'merluzzo': '&#128031;', 'cod': '&#128031;', 'platessa': '&#128031;', 'sogliola': '&#128031;', 'sole': '&#128031;',

@@ -1528,7 +1528,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 32px;
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(59,176,149,0.2);
   overflow: hidden;
@@ -1644,15 +1644,19 @@ body {
 }
 
 /* Emoji preview accanto all'input */
-.shopping-emoji-preview {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 24px;
-  pointer-events: none;
-  opacity: 0.8;
+.shopping-emoji-preview-center {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(59,176,149,0.2);
   transition: all 0.2s;
+  margin: 0 4px;
 }
 
 /* Dropdown suggerimenti */
