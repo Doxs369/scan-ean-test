@@ -24,9 +24,9 @@ var dailyRecipes = null;
 var shoppingCompleteShown = false;
 
 var categoryEmojis = {
-  dairy: '&#129371;', meat: '&#129385;', produce: '&#129388;',
-  pantry: '&#129387;', beverages: '&#129380;', frozen: '&#129482;',
-  bakery: '&#127838;', sweets: '&#127852;'
+  dairy: '🥛', meat: '🥩', produce: '🥬',
+  pantry: '🥫', beverages: '🥤', frozen: '🧊',
+  bakery: '🍞', sweets: '🍬'
 };
 
 var categoryNames = {
@@ -35,11 +35,15 @@ var categoryNames = {
   bakery: 'Panetteria', sweets: 'Dolci'
 };
 
+var customCategories = {};
+var selectedCategoryKey = null;
+
 // ============================================================
 // INIT
 // ============================================================
 function init() {
   settings = Storage.loadSettings();
+  loadCustomCategories();
 
   var savedProducts = Storage.loadProducts();
   var savedList = Storage.loadShoppingList();
@@ -474,6 +478,10 @@ function handleManualProductPhoto(event) {
     var manualDiv = document.getElementById('manual-barcode-input');
     if (manualDiv) manualDiv.style.display = 'none';
 
+    selectedCategoryKey = null;
+    renderCategoryPicker(null);
+    updateAddButtonState();
+
     document.getElementById('scan-result').classList.add('show');
     showToast('&#128247; Foto caricata! Inserisci il nome del prodotto');
   };
@@ -560,6 +568,10 @@ function showProductFound(product) {
   expiryInput.value = expiry.toISOString().split('T')[0];
   qtyInput.value = '1';
 
+  selectedCategoryKey = category;
+  renderCategoryPicker(category);
+  updateAddButtonState();
+
   document.getElementById('scan-result').classList.add('show');
   Storage.saveProducts(products);
 }
@@ -599,6 +611,11 @@ function showProductNotFound(barcode) {
   qtyInput.value = '1';
 
   btnCamera.style.display = 'block';
+
+  selectedCategoryKey = null;
+  renderCategoryPicker(null);
+  updateAddButtonState();
+
   document.getElementById('scan-result').classList.add('show');
 }
 
@@ -617,6 +634,7 @@ function closeScanResult() {
   currentBarcode = null;
   currentImageUrl = null;
   cameraPhotoData = null;
+  selectedCategoryKey = null;
 
   if (isScanning && document.getElementById('screen-scanner').classList.contains('active')) {
     BarcodeScanner.start();
@@ -700,7 +718,7 @@ function addProduct() {
     id: nextId++,
     name: name,
     emoji: scannedProductData.emoji || '&#128230;',
-    category: scannedProductData.category || 'pantry',
+    category: selectedCategoryKey || 'pantry',
     expiryDate: expiry,
     qty: qty,
     barcode: currentBarcode,
@@ -2529,4 +2547,227 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
+}
+
+
+// ============================================================
+// CATEGORY PICKER - CATEGORIE DINAMICHE
+// ============================================================
+
+function loadCustomCategories() {
+  try {
+    var data = localStorage.getItem('scanEan_customCategories');
+    if (data) {
+      customCategories = JSON.parse(data);
+      for (var key in customCategories) {
+        if (customCategories.hasOwnProperty(key)) {
+          categoryEmojis[key] = customCategories[key].emoji;
+          categoryNames[key] = customCategories[key].name;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Errore caricamento categorie custom:', e);
+    customCategories = {};
+  }
+}
+
+function saveCustomCategories() {
+  try {
+    localStorage.setItem('scanEan_customCategories', JSON.stringify(customCategories));
+  } catch (e) {
+    console.error('Errore salvataggio categorie custom:', e);
+  }
+}
+
+function saveCustomCategory() {
+  var nameInput = document.getElementById('custom-cat-name');
+  var name = nameInput ? nameInput.value.trim() : '';
+
+  if (!name) {
+    showToast('Inserisci un nome per la categoria');
+    return;
+  }
+
+  if (!window.selectedCustomEmoji) {
+    showToast('Seleziona un emoji');
+    return;
+  }
+
+  var key = 'custom_' + Date.now();
+  customCategories[key] = {
+    name: name,
+    emoji: window.selectedCustomEmoji
+  };
+
+  categoryEmojis[key] = window.selectedCustomEmoji;
+  categoryNames[key] = name;
+
+  saveCustomCategories();
+
+  document.getElementById('create-category-form').style.display = 'none';
+  nameInput.value = '';
+  window.selectedCustomEmoji = null;
+
+  selectedCategoryKey = key;
+  renderCategoryPicker(selectedCategoryKey);
+
+  showToast('Categoria "' + name + '" creata!');
+}
+
+function toggleCreateCategoryForm() {
+  var form = document.getElementById('create-category-form');
+  var isVisible = form.style.display === 'block';
+
+  if (isVisible) {
+    form.style.display = 'none';
+    return;
+  }
+
+  form.style.display = 'block';
+
+  var grid = document.getElementById('emoji-grid');
+  if (grid && grid.children.length === 0) {
+    renderEmojiGrid();
+  }
+
+  setTimeout(function() {
+    var nameInput = document.getElementById('custom-cat-name');
+    if (nameInput) nameInput.focus();
+  }, 100);
+}
+
+function renderEmojiGrid() {
+  var grid = document.getElementById('emoji-grid');
+  if (!grid) return;
+
+  var emojis = [
+    '🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈',
+    '🍒','🍑','🍍','🥝','🥥','🥑','🍆','🥔','🥕','🌽',
+    '🌶️','🫑','🥒','🥬','🥦','🧄','🧅','🍄','🥜','🌰',
+    '🍞','🥐','🥖','🥨','🥯','🥞','🧇','🧀','🍖','🍗',
+    '🥩','🥓','🍔','🍟','🍕','🌭','🥪','🌮','🌯','🫔',
+    '🥙','🧆','🥚','🍳','🥘','🍲','🫕','🥣','🥗','🍿',
+    '🧈','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝',
+    '🍠','🍢','🍣','🍤','🍥','🍡','🥟','🥠','🥡','🦀',
+    '🦞','🦐','🦑','🦪','🍦','🍧','🍨','🍩','🍪','🎂',
+    '🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','🍼','🥛',
+    '☕','🫖','🍵','🍶','🍾','🍷','🍸','🍹','🍺','🍻',
+    '🥂','🥃','🫗','🥤','🧋','🧃','🧉','🧊','🥢','🍽️',
+    '🍴','🥄','🔪','🧴','🧹','🧺','🧻','🧼','🧽',
+    '🧯','🛒','🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑',
+    '🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🦽','🦼',
+    '🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','🚥','🚦',
+    '🛑','🚧','⚓','🛟','⛵','🛶','🚤','🛳️','⛴️','🛥️',
+    '🚢','✈️','🛩️','🛫','🛬','🪂','💺','🚁','🚟','🚠',
+    '🚡','🛰️','🚀','🛸','🌍','🌎','🌏','🌐','🗺️','🗾',
+    '🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️',
+    '🏟️','🏛️','🏗️','🧱','🪨','🪵','🛖','🏘️','🏚️','🏠',
+    '🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫',
+    '🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕',
+    '🕍','⛩️','🕋','⛲','⛺','🌁','🌃','🏙️','🌄','🌅',
+    '🌆','🌇','🌉','♨️','🎠','🛝','🎡','🎢','💈','🎪',
+    '🚂','🚃','🚄','🚅','🚆','🚇','🚈','🚉','🚊','🚝',
+    '🚞','🚋','🚌','🚍','🚎','🚐','🚑','🚒','🚓','🚔',
+    '🚕','🚖','🚗','🚘','🚙','🛻','🚚','🚛','🚜','🏎️',
+    '🏍️','🛵','🦽','🦼','🛺','🚲','🛴','🛹','🛼','🚏',
+    '🛣️','🛤️','🚥','🚦','🛑','🚧','⚓','🛟','⛵','🛶',
+    '🚤','🛳️','⛴️','🛥️','🚢','✈️','🛩️','🛫','🛬','🪂',
+    '💺','🚁','🚟','🚠','🚡','🛰️','🚀','🛸'
+  ];
+
+  var html = '';
+  for (var i = 0; i < emojis.length; i++) {
+    html += '<button type="button" class="emoji-grid-item" onclick="selectEmojiForCategory(this, '' + emojis[i] + '')">' + emojis[i] + '</button>';
+  }
+  grid.innerHTML = html;
+}
+
+function selectEmojiForCategory(btn, emoji) {
+  window.selectedCustomEmoji = emoji;
+
+  var items = document.querySelectorAll('.emoji-grid-item');
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.remove('selected');
+  }
+
+  btn.classList.add('selected');
+}
+
+function renderCategoryPicker(selectedKey) {
+  var picker = document.getElementById('category-picker');
+  if (!picker) return;
+
+  var allCategories = [];
+
+  var defaultCats = ['dairy','bakery','sweets','beverages','produce','frozen','meat','pantry'];
+  for (var d = 0; d < defaultCats.length; d++) {
+    allCategories.push({
+      key: defaultCats[d],
+      name: categoryNames[defaultCats[d]],
+      emoji: categoryEmojis[defaultCats[d]]
+    });
+  }
+
+  for (var key in customCategories) {
+    if (customCategories.hasOwnProperty(key)) {
+      allCategories.push({
+        key: key,
+        name: customCategories[key].name,
+        emoji: customCategories[key].emoji
+      });
+    }
+  }
+
+  var html = '<div class="category-picker-grid">';
+  for (var c = 0; c < allCategories.length; c++) {
+    var cat = allCategories[c];
+    var isSelected = cat.key === selectedKey;
+    html += '<button type="button" class="category-btn ' + (isSelected ? 'active' : '') + '" ' +
+            'onclick="selectCategory('' + cat.key + '')">' +
+            '<span class="category-btn-emoji">' + cat.emoji + '</span>' +
+            '<span class="category-btn-name">' + cat.name + '</span>' +
+            '</button>';
+  }
+  html += '</div>';
+
+  html += '<button type="button" class="category-create-btn" onclick="toggleCreateCategoryForm()">' +
+          '<span>+ Crea categoria</span>' +
+          '</button>';
+
+  picker.innerHTML = html;
+}
+
+function selectCategory(key) {
+  selectedCategoryKey = key;
+
+  var btns = document.querySelectorAll('.category-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.remove('active');
+  }
+
+  var clicked = event.currentTarget || event.target;
+  if (clicked) clicked.classList.add('active');
+
+  if (scannedProductData) {
+    scannedProductData.category = key;
+    scannedProductData.emoji = categoryEmojis[key] || '📦';
+  }
+
+  updateAddButtonState();
+}
+
+function updateAddButtonState() {
+  var btn = document.querySelector('#scan-result .btn-primary');
+  if (!btn) return;
+
+  if (!selectedCategoryKey) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  } else {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  }
 }

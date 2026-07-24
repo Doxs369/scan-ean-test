@@ -1,317 +1,263 @@
-/**
- * Barcode Scanner Module - ZXing + QuaggaJS fallback
- * Scansiona barcode EAN-13 in tempo reale dalla fotocamera
- */
+/* ===== SCANNER BARCODE QUAGGAJS ===== */
 
-var BarcodeScanner = (function() {
-  'use strict';
+let quaggaInitialized = false;
+let lastScannedCode = null;
+let scanCooldown = false;
+let manualInputMode = false;
 
-  var videoElement = null;
-  var canvasElement = null;
-  var canvasContext = null;
-  var scanInterval = null;
-  var isScanning = false;
-  var lastScanTime = 0;
-  var scanCooldown = 2000; // ms tra una scansione e l'altra
-  var onBarcodeDetected = null;
-  var zxingLoaded = false;
-  var quaggaLoaded = false;
+// ===== AVVIO SCANNER =====
+function startScanner() {
+  // Nascondi input manuale se visibile
+  hideManualInput();
 
-  // ZXing reader
-  var codeReader = null;
-
-  /**
-   * Inizializza lo scanner
-   */
-  function init(videoId, canvasId, onDetected) {
-    videoElement = document.getElementById(videoId);
-    canvasElement = document.getElementById(canvasId);
-    if (canvasElement) {
-      canvasContext = canvasElement.getContext('2d');
-    }
-    onBarcodeDetected = onDetected;
-
-    // Prova a caricare ZXing
-    loadZXing().then(function() {
-      console.log('ZXing caricato con successo');
-    }).catch(function() {
-      console.log('ZXing non disponibile, usero QuaggaJS');
-      loadQuagga();
-    });
+  if (quaggaInitialized) {
+    Quagga.start();
+    return;
   }
 
-  /**
-   * Carica ZXing dalla CDN
-   */
-  function loadZXing() {
-    return new Promise(function(resolve, reject) {
-      if (typeof ZXing !== 'undefined') {
-        zxingLoaded = true;
-        codeReader = new ZXing.BrowserMultiFormatReader();
-        resolve();
-        return;
+  Quagga.init({
+    inputStream: {
+      name: "Live",
+      type: "LiveStream",
+      target: document.querySelector('#camera-video'),
+      constraints: {
+        width: { min: 640 },
+        height: { min: 480 },
+        facingMode: "environment",
+        aspectRatio: { min: 1, max: 2 }
       }
-
-      var script = document.createElement('script');
-      script.src = 'https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js';
-      script.onload = function() {
-        zxingLoaded = true;
-        codeReader = new ZXing.BrowserMultiFormatReader();
-        resolve();
-      };
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  /**
-   * Carica QuaggaJS dalla CDN (fallback)
-   */
-  function loadQuagga() {
-    return new Promise(function(resolve, reject) {
-      if (typeof Quagga !== 'undefined') {
-        quaggaLoaded = true;
-        resolve();
-        return;
-      }
-
-      var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js';
-      script.onload = function() {
-        quaggaLoaded = true;
-        resolve();
-      };
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  /**
-   * Avvia la scansione continua
-   */
-  function startScanning() {
-    if (isScanning) return;
-    isScanning = true;
-
-    if (zxingLoaded && codeReader) {
-      startZXingScan();
-    } else if (quaggaLoaded) {
-      startQuaggaScan();
-    } else {
-      // Fallback: scansione manuale con frame capture
-      startManualScan();
+    },
+    locator: {
+      patchSize: "medium",
+      halfSample: true
+    },
+    numOfWorkers: navigator.hardwareConcurrency || 4,
+    decoder: {
+      readers: [
+        "ean_reader",
+        "ean_8_reader",
+        "code_128_reader",
+        "upc_reader",
+        "upc_e_reader"
+      ],
+      multiple: false
+    },
+    locate: true
+  }, function(err) {
+    if (err) {
+      console.error("[Scanner] Errore init:", err);
+      showToast("Errore fotocamera: " + err.name);
+      // Se la camera fallisce, mostra subito input manuale
+      showManualInput();
+      return;
     }
+    quaggaInitialized = true;
+    Quagga.start();
+    console.log("[Scanner] Inizializzato");
+  });
+
+  // ===== RILEVAZIONE BARCODE =====
+  Quagga.onDetected(function(result) {
+    // Debounce: evita scansioni multiple
+    if (scanCooldown) return;
+
+    const code = result.codeResult.code;
+
+    // Validazione: EAN deve essere 8, 12 o 13 cifre
+    if (!code || !/^\d{8,13}$/.test(code)) return;
+
+    // Evita scansione doppia dello stesso codice
+    if (code === lastScannedCode) return;
+    lastScannedCode = code;
+    scanCooldown = true;
+
+    console.log("[Scanner] Barcode rilevato:", code);
+
+    // STOP IMMEDIATO per evitare loop
+    Quagga.stop();
+    Quagga.offDetected();
+
+    // Feedback visivo
+    showToast("\u2705 Barcode: " + code);
+
+    // Cerca il prodotto
+    lookupBarcode(code);
+
+    // Reset cooldown dopo 3 secondi
+    setTimeout(function() {
+      scanCooldown = false;
+      lastScannedCode = null;
+    }, 3000);
+  });
+}
+
+// ===== STOP SCANNER =====
+function stopScanner() {
+  if (quaggaInitialized) {
+    Quagga.stop();
+    Quagga.offDetected();
   }
+  hideManualInput();
+}
 
-  /**
-   * Ferma la scansione
-   */
-  function stopScanning() {
-    isScanning = false;
-
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
-
-    if (codeReader) {
-      codeReader.reset();
-    }
-
-    if (quaggaLoaded && typeof Quagga !== 'undefined') {
-      Quagga.stop();
-    }
+// ===== SCANSIONE MANUALE (tasto cerchio bianco) =====
+function captureBarcode() {
+  if (scanCooldown) {
+    showToast("Attendi... scansione in corso");
+    return;
   }
+  // Se Quagga è attivo, forza una "scansione" del frame corrente
+  // Altrimenti mostra input manuale
+  showManualInput();
+}
 
-  /**
-   * Scansione con ZXing (piu affidabile)
-   */
-  function startZXingScan() {
-    if (!videoElement || !codeReader) return;
+// ===== INPUT MANUALE EAN =====
+function showManualInput() {
+  manualInputMode = true;
+  let overlay = document.getElementById('manual-barcode-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'manual-barcode-overlay';
+    overlay.className = 'manual-barcode';
+    overlay.innerHTML = `
+      <div style="font-size:18px;font-weight:700;color:white;margin-bottom:12px;">Inserisci codice EAN</div>
+      <input type="text" id="manual-ean-input" placeholder="1234567890123" maxlength="13" inputmode="numeric" pattern="[0-9]*">
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+        <button onclick="submitManualEAN()" style="padding:10px 20px;border-radius:8px;background:var(--primary);color:white;border:none;font-weight:700;cursor:pointer;">Cerca</button>
+        <button onclick="hideManualInput()" style="padding:10px 20px;border-radius:8px;background:rgba(255,255,255,0.2);color:white;border:none;font-weight:700;cursor:pointer;">Annulla</button>
+      </div>
+    `;
+    document.querySelector('.scanner-container').appendChild(overlay);
 
-    // ZXing ha un metodo diretto per scansionare dal video
-    codeReader.decodeFromVideoDevice(undefined, videoElement.id, function(result, error) {
-      if (!isScanning) return;
+    // Focus automatico
+    setTimeout(function() {
+      const input = document.getElementById('manual-ean-input');
+      if (input) input.focus();
+    }, 100);
 
-      if (result && result.getText()) {
-        var barcode = result.getText();
-        var now = Date.now();
-        if (now - lastScanTime > scanCooldown) {
-          lastScanTime = now;
-          if (onBarcodeDetected) {
-            onBarcodeDetected(barcode);
-          }
-        }
-      }
+    // Enter per inviare
+    document.getElementById('manual-ean-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') submitManualEAN();
     });
   }
+  overlay.style.display = 'block';
 
-  /**
-   * Scansione con QuaggaJS (fallback)
-   */
-  function startQuaggaScan() {
-    if (!videoElement) return;
+  // Ferma la camera mentre l'utente digita
+  if (quaggaInitialized) Quagga.pause();
+}
 
-    Quagga.init({
-      inputStream: {
-        name: 'Live',
-        type: 'LiveStream',
-        target: videoElement,
-        constraints: {
-          facingMode: 'environment',
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 }
-        }
-      },
-      locator: {
-        patchSize: 'medium',
-        halfSample: true
-      },
-      numOfWorkers: 2,
-      frequency: 10,
-      decoder: {
-        readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader']
-      },
-      locate: true
-    }, function(err) {
-      if (err) {
-        console.error('Errore Quagga:', err);
-        startManualScan();
-        return;
-      }
-      Quagga.start();
-    });
+function hideManualInput() {
+  manualInputMode = false;
+  const overlay = document.getElementById('manual-barcode-overlay');
+  if (overlay) overlay.style.display = 'none';
+  // Riprendi camera
+  if (quaggaInitialized) Quagga.start();
+}
 
-    Quagga.onDetected(function(result) {
-      if (!isScanning) return;
+function submitManualEAN() {
+  const input = document.getElementById('manual-ean-input');
+  const code = input.value.trim();
 
-      var code = result.codeResult.code;
-      var now = Date.now();
-      if (now - lastScanTime > scanCooldown) {
-        lastScanTime = now;
-        if (onBarcodeDetected) {
-          onBarcodeDetected(code);
-        }
-      }
-    });
+  if (!code || !/^\d{8,13}$/.test(code)) {
+    showToast("\u26a0\ufe0f Inserisci un codice EAN valido (8-13 cifre)");
+    input.style.borderColor = '#E85D5D';
+    setTimeout(function() { input.style.borderColor = ''; }, 1000);
+    return;
   }
 
-  /**
-   * Scansione manuale (capture frame + analisi)
-   * Usato quando nessuna libreria e disponibile
-   */
-  function startManualScan() {
-    if (!videoElement || !canvasElement || !canvasContext) return;
+  hideManualInput();
+  showToast("\u2705 EAN: " + code);
+  lookupBarcode(code);
+}
 
-    scanInterval = setInterval(function() {
-      if (!isScanning || !videoElement.videoWidth) return;
+// ===== RICERCA PRODOTTO (stub - integra con openfoodfacts.js) =====
+function lookupBarcode(code) {
+  // Mostra loading
+  const apiLoading = document.getElementById('api-loading');
+  if (apiLoading) apiLoading.style.display = 'block';
 
-      canvasElement.width = videoElement.videoWidth;
-      canvasElement.height = videoElement.videoHeight;
-      canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-
-      // Estrai pixel data e cerca pattern barcode (semplificato)
-      // Per ora usiamo un approccio: se l'utente preme il pulsante, catturiamo
+  // Se esiste la funzione fetchProductFromAPI in openfoodfacts.js, la usa
+  if (typeof fetchProductFromAPI === 'function') {
+    fetchProductFromAPI(code).then(function(product) {
+      if (apiLoading) apiLoading.style.display = 'none';
+      if (product) {
+        showScanResult(product);
+      } else {
+        showScanResult({ name: 'Prodotto sconosciuto', ean: code, image: null });
+      }
+    }).catch(function(err) {
+      if (apiLoading) apiLoading.style.display = 'none';
+      showScanResult({ name: 'Prodotto sconosciuto', ean: code, image: null });
+    });
+  } else {
+    // Fallback se openfoodfacts.js non è caricato
+    setTimeout(function() {
+      if (apiLoading) apiLoading.style.display = 'none';
+      showScanResult({ name: 'Prodotto sconosciuto', ean: code, image: null });
     }, 500);
   }
+}
 
-  /**
-   * Scansiona un singolo frame (per pulsante manuale)
-   */
-  function scanSingleFrame() {
-    if (!videoElement || !canvasElement || !canvasContext) return null;
+// ===== MOSTRA RISULTATO SCAN =====
+function showScanResult(product) {
+  const resultModal = document.getElementById('scan-result');
+  const titleEl = document.getElementById('result-title');
+  const subEl = document.getElementById('result-sub');
+  const imgEl = document.getElementById('result-img');
+  const nameInput = document.getElementById('product-name-input');
 
-    canvasElement.width = videoElement.videoWidth || 640;
-    canvasElement.height = videoElement.videoHeight || 480;
-    canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+  if (titleEl) titleEl.textContent = product.name || 'Prodotto';
+  if (subEl) subEl.textContent = 'EAN: ' + (product.ean || '---');
+  if (nameInput) nameInput.value = product.name || '';
 
-    // Prova ZXing sul frame
-    if (zxingLoaded && codeReader) {
-      var imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
-      // ZXing non supporta direttamente ImageData in questa versione
-      // Usiamo il canvas come source
-      return canvasElement.toDataURL('image/png');
+  if (imgEl) {
+    if (product.image) {
+      imgEl.innerHTML = '<img src="' + product.image + '" style="width:100%;height:100%;object-fit:cover;">';
+    } else {
+      imgEl.innerHTML = '<span class="placeholder-text">&#129371;</span>';
     }
-
-    return null;
   }
 
-  /**
-   * Verifica se un codice e valido EAN-13
-   */
-  function isValidEAN13(code) {
-    if (!code || code.length !== 13) return false;
-    if (!/^\d{13}$/.test(code)) return false;
+  if (resultModal) resultModal.classList.add('show');
+}
 
-    // Calcola checksum EAN-13
-    var sum = 0;
-    for (var i = 0; i < 12; i++) {
-      var digit = parseInt(code.charAt(i));
-      sum += (i % 2 === 0) ? digit : digit * 3;
-    }
-    var checksum = (10 - (sum % 10)) % 10;
-    return checksum === parseInt(code.charAt(12));
+// ===== TORCIA =====
+let torchOn = false;
+function toggleTorch() {
+  torchOn = !torchOn;
+  const track = Quagga.CameraAccess.getActiveTrack();
+  if (track && typeof track.applyConstraints === 'function') {
+    track.applyConstraints({
+      advanced: [{ torch: torchOn }]
+    }).then(function() {
+      showToast(torchOn ? "\ud83d\udd0d Torcia accesa" : "\ud83d\udd0d Torcia spenta");
+    }).catch(function() {
+      showToast("Torcia non supportata");
+    });
+  }
+}
+
+// ===== TOAST =====
+function showToast(message) {
+  // Se esiste la funzione globale showToast in app.js, usa quella
+  if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+    window.showToast(message);
+    return;
   }
 
-  /**
-   * Verifica se un codice e valido EAN-8
-   */
-  function isValidEAN8(code) {
-    if (!code || code.length !== 8) return false;
-    if (!/^\d{8}$/.test(code)) return false;
-
-    var sum = 0;
-    for (var i = 0; i < 7; i++) {
-      var digit = parseInt(code.charAt(i));
-      sum += (i % 2 === 0) ? digit * 3 : digit;
-    }
-    var checksum = (10 - (sum % 10)) % 10;
-    return checksum === parseInt(code.charAt(7));
+  let toast = document.getElementById('scanner-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'scanner-toast';
+    toast.style.cssText = 'position:fixed;top:20%;left:50%;transform:translate(-50%,-50%) scale(0.9);opacity:0;background:rgba(30,40,35,0.94);color:white;padding:14px 20px;border-radius:20px;font-size:14px;font-weight:600;z-index:300;transition:all 0.3s;backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12);pointer-events:none;white-space:nowrap;';
+    document.body.appendChild(toast);
   }
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translate(-50%,-50%) scale(1)';
 
-  /**
-   * Valida un barcode (EAN-13 o EAN-8)
-   */
-  function validateBarcode(code) {
-    return isValidEAN13(code) || isValidEAN8(code);
-  }
-
-  /**
-   * Cattura un frame dalla camera come DataURL per OCR
-   */
-  function captureFrameForOCR() {
-    if (!videoElement || !videoElement.videoWidth) return null;
-
-    var canvas = document.createElement('canvas');
-    var ctx = canvas.getContext('2d');
-
-    // Riduci risoluzione per velocita OCR
-    var scale = 0.5;
-    canvas.width = videoElement.videoWidth * scale;
-    canvas.height = videoElement.videoHeight * scale;
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-    return canvas.toDataURL('image/jpeg', 0.8);
-  }
-
-  /**
-   * Verifica se la scansione e attiva
-   */
-  function isScanningActive() {
-    return isScanning;
-  }
-
-  // API pubblica
-  return {
-    init: init,
-    start: startScanning,
-    stop: stopScanning,
-    scanFrame: scanSingleFrame,
-    validate: validateBarcode,
-    isValidEAN13: isValidEAN13,
-    isValidEAN8: isValidEAN8,
-    isReady: function() { return zxingLoaded || quaggaLoaded; },
-    captureFrameForOCR: captureFrameForOCR,
-    isScanningActive: isScanningActive
-  };
-})();
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translate(-50%,-50%) scale(0.9)';
+  }, 2500);
+}
