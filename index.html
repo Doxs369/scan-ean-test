@@ -16,11 +16,6 @@
 <!-- Manifest PWA -->
 <link rel="manifest" href="./manifest.json">
 
-<!-- Favicon -->
-<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
-<link rel="shortcut icon" href="./favicon.ico">
-
 <!-- Apple Touch Icons -->
 <link rel="apple-touch-icon" sizes="72x72" href="./icons/icon-72x72.png">
 <link rel="apple-touch-icon" sizes="96x96" href="./icons/icon-96x96.png">
@@ -34,7 +29,7 @@
 <link rel="apple-touch-startup-image" href="./icons/icon-512x512.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
 
 <title>ScanEan - Gestione Dispensa</title>
-<link rel="stylesheet" href="./style.css?v=2">
+<link rel="stylesheet" href="./style.css?v=3">
 <!-- Cache busting -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -206,11 +201,19 @@
         <button class="btn btn-accent" id="btn-scan-expiry" onclick="scanExpiryDate()" style="margin-bottom:8px;">
           &#128247; Scansiona data scadenza
         </button>
-        
 
         <div class="form-group">
           <label class="form-label">Quantita</label>
           <input type="number" class="form-input" id="qty-input" value="1" min="1">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-input" id="category-select"></select>
+        </div>
+        <div class="form-group" id="new-category-group" style="display:none;">
+          <label class="form-label">Nuova categoria</label>
+          <input type="text" class="form-input" id="new-category-input" placeholder="Nome nuova categoria...">
         </div>
 
         <button class="btn btn-accent" id="btn-camera" onclick="openCamera()" style="display:none;">
@@ -284,14 +287,14 @@
   <!-- BOTTOM NAV -->
   <div class="bottom-nav has-safe-area">
     <button class="nav-item active" onclick="navigateTo('pantry')" id="nav-pantry">
-      <span id="nav-pantry-icon" class="nav-emoji">🏠</span>
+      <span id="nav-pantry-icon" class="nav-emoji">&#127968;</span>
       <span class="nav-label">Dispensa</span>
     </button>
     <button class="nav-scan" onclick="startScanner()" id="nav-scanner-btn">
-      <span id="nav-scan-icon">📸</span>
+      <span id="nav-scan-icon">&#128248;</span>
     </button>
     <button class="nav-item" onclick="navigateTo('list')" id="nav-list">
-      <span id="nav-list-icon" class="nav-emoji">📝</span>
+      <span id="nav-list-icon" class="nav-emoji">&#128221;</span>
       <span class="nav-label">Lista</span>
     </button>
   </div>
@@ -379,7 +382,7 @@
       <div class="modal-handle"></div>
       <div class="modal-title">&#128197; Data rilevata</div>
       <div class="modal-sub">Ho trovato questa data sull'imballaggio</div>
-      
+
       <div style="margin-top:20px; text-align:center;">
         <div class="expiry-confirm-img" id="expiry-preview-img">
           <span style="font-size:48px;">&#128247;</span>
@@ -387,7 +390,7 @@
         <div class="expiry-detected-date" id="expiry-detected-value">--/--/----</div>
         <div class="expiry-detected-conf" id="expiry-detected-confidence">Confidenza: --%</div>
       </div>
-      
+
       <div style="margin-top:20px;">
         <button class="btn btn-primary" onclick="acceptDetectedExpiry()">&#9989; Accetta e inserisci</button>
         <button class="btn btn-secondary" style="margin-top:8px;" onclick="editDetectedExpiry()">&#9998; Modifica manualmente</button>
@@ -449,7 +452,7 @@
     <div class="expiry-camera-status" id="expiry-camera-status">Scatta la foto alla data</div>
     <div class="expiry-camera-actions">
       <button class="expiry-camera-close" onclick="closeExpiryCamera()" title="Annulla">&#10005;</button>
-      <button class="expiry-camera-btn" onclick="captureExpiryPhoto()" title="Scatta foto">
+      <button class="expiry-camera-btn" onclick="manualExpiryCapture()" title="Scatta foto">
         <div class="expiry-camera-btn-inner"></div>
       </button>
     </div>
@@ -473,12 +476,12 @@
 <script src="./recipes-api.js"></script>
 <script src="./camera.js"></script>
 <script src="./barcode-scanner.js?v=2"></script>
-<script src="./app.js?v=2"></script>
+<script src="./app.js?v=3"></script>
 
 
   <!-- PWA Install Banner -->
   <div class="pwa-install-banner" id="pwa-install-banner">
-    <div class="pwa-install-icon">📦</div>
+    <div class="pwa-install-icon">&#128230;</div>
     <div class="pwa-install-text">
       <div class="pwa-install-title">Installa ScanEan</div>
       <div class="pwa-install-desc">Aggiungi alla schermata home per un accesso rapido</div>
