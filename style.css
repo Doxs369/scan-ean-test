@@ -1645,16 +1645,7 @@ body {
 }
 
 /* Emoji preview accanto all'input */
-.shopping-emoji-preview {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 22px;
-  pointer-events: none;
-  opacity: 0.9;
-  transition: all 0.2s;
-}
+
 
 /* Dropdown suggerimenti */
 .shopping-suggestions {
@@ -1715,4 +1706,52 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Emoji preview MOBILE (dentro l'input, visibile solo su telefono) */
+.shopping-emoji-preview-mobile {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: all 0.2s;
+}
+
+/* Emoji preview DESKTOP (tra input e tasto +, visibile solo su PC) */
+.shopping-emoji-preview-desktop {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-light), var(--primary));
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(59,176,149,0.2);
+  transition: all 0.2s;
+  margin: 0 6px;
+}
+
+/* Su schermi grandi (PC): mostra desktop, nascondi mobile */
+@media (min-width: 768px) {
+  .shopping-emoji-preview-mobile {
+    display: none !important;
+  }
+  .shopping-emoji-preview-desktop {
+    display: flex !important;
+  }
+}
+
+/* Su schermi piccoli (telefono): mostra mobile, nascondi desktop */
+@media (max-width: 767px) {
+  .shopping-emoji-preview-mobile {
+    display: block;
+  }
+  .shopping-emoji-preview-desktop {
+    display: none !important;
+  }
 }

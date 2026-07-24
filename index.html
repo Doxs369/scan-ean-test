@@ -643,9 +643,10 @@
     <div class="add-item-bar">
       <div class="shopping-input-wrapper">
         <input type="text" class="add-item-input" placeholder="Aggiungi un prodotto..." id="newItemInput" autocomplete="off" oninput="handleShoppingInput()" onkeydown="if(event.key==='Enter'){addListItem();}">
-        <div class="shopping-emoji-preview" id="shopping-emoji-preview">&#128722;</div>
+        <div class="shopping-emoji-preview-mobile" id="shopping-emoji-preview-mobile">&#128722;</div>
         <div class="shopping-suggestions" id="shopping-suggestions"></div>
       </div>
+      <div class="shopping-emoji-preview-desktop" id="shopping-emoji-preview">&#128722;</div>
       <button class="add-item-btn" onclick="addListItem()">+</button>
     </div>
 

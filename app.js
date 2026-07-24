@@ -1427,9 +1427,11 @@ function addListItem() {
   shoppingList.push({ id: nextListId++, name: name, checked: false, reason: 'Aggiunto manualmente', imageUrl: imageUrl, emoji: emoji });
   input.value = '';
 
-  // Reset emoji preview
-  var preview = document.getElementById('shopping-emoji-preview');
-  if (preview) preview.innerHTML = '&#128722;';
+  // Reset emoji preview (entrambe)
+  var previewDesktop = document.getElementById('shopping-emoji-preview');
+  var previewMobile = document.getElementById('shopping-emoji-preview-mobile');
+  if (previewDesktop) previewDesktop.innerHTML = '&#128722;';
+  if (previewMobile) previewMobile.innerHTML = '&#128722;';
 
   Storage.saveShoppingList(shoppingList);
   renderShoppingList();
@@ -1681,10 +1683,15 @@ function handleShoppingInput() {
   var similar = findSimilarPantryProducts(value);
   showShoppingSuggestions(similar);
 
-  // Aggiorna emoji preview
-  var preview = document.getElementById('shopping-emoji-preview');
-  if (preview) {
-    preview.innerHTML = getEmojiForProduct(value);
+  // Aggiorna emoji preview (entrambe: mobile e desktop)
+  var emoji = getEmojiForProduct(value);
+  var previewDesktop = document.getElementById('shopping-emoji-preview');
+  var previewMobile = document.getElementById('shopping-emoji-preview-mobile');
+  if (previewDesktop) {
+    previewDesktop.innerHTML = emoji;
+  }
+  if (previewMobile) {
+    previewMobile.innerHTML = emoji;
   }
 }
 
